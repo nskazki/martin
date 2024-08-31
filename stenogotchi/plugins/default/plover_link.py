@@ -435,6 +435,12 @@ class BTKbDevice:
                 alias = managed_objects[path].get('org.bluez.Device1', {}).get('Alias')
                 logging.info(f'[plover_link] Device {alias} [{addr}] is connected')
 
+                sleep(1)
+                self.send([0xA1, 1, 0, 0, 30, 0, 0, 0, 0, 0])
+                sleep(0.01)
+                self.send([0xA1, 1, 0, 0,  0, 0, 0, 0, 0, 0])
+                sleep(0.01)
+
         return alias
 
     def send(self, msg):
