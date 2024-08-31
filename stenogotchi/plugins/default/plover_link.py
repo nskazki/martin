@@ -21,25 +21,14 @@ from time import sleep
 from gi.repository import GLib
 from dbus.mainloop.glib import DBusGMainLoop
 
-if not __name__ == '__main__':
-    import stenogotchi.plugins as plugins
-    ObjectClass = plugins.Plugin
-else:
-    ObjectClass = object
-
-class BluezErrorRejected(dbus.DBusException):
-    _dbus_error_name = "org.bluez.Error.Rejected"
-
-
 class BluezErrorCanceled(dbus.DBusException):
     _dbus_error_name = "org.bluez.Error.Canceled"
 
-
 class Agent(dbus.service.Object):
-    """ 
+    """
     BT Pairing agent
-    API: https://git.kernel.org/pub/scm/bluetooth/bluez.git/plain/doc/agent-api.txt 
-    examples: https://github.com/elsampsa/btdemo/blob/master/bt_studio.py 
+    API: https://git.kernel.org/pub/scm/bluetooth/bluez.git/plain/doc/agent-api.txt
+    examples: https://github.com/elsampsa/btdemo/blob/master/bt_studio.py
     """
 
     @dbus.service.method('org.bluez.Agent1',
@@ -59,7 +48,7 @@ class Agent(dbus.service.Object):
     def Cancel(self):
         logging.info("[plover_link] Cancel request received from BT client")
         raise(BluezErrorCanceled)
-    
+
     @dbus.service.method('org.bluez.Agent1',
                 in_signature='', out_signature='')
     def Release(self):
@@ -99,7 +88,7 @@ class HumanInterfaceDeviceProfile(dbus.service.Object):
             if self.fd > 0:
                     os.close(self.fd)
                     self.fd = -1
-       
+
 
 class BTKbDevice:
     """
@@ -126,8 +115,7 @@ class BTKbDevice:
     UUID = '00001124-0000-1000-8000-00805f9b34fb'
 
     def __init__(self, hci=0):
-        self._agent = plugins.loaded['plover_link']._agent
-        self.bt_autoconnect_list = None
+        self.bt_autoconnect_list = ['F8:4D:89:63:2C:CE']
         self.bt_last_conn = None
         self.autoconnect_in_progress = False
         self.bt_agent_running = False
@@ -138,8 +126,8 @@ class BTKbDevice:
         self.dev_path = '/org/bluez/hci{}'.format(hci)
         logging.info('[plover_link] Setting up BT device')
         self.bus = dbus.SystemBus()
-        
-        self.adapter_methods = dbus.Interface(self.bus.get_object('org.bluez', 
+
+        self.adapter_methods = dbus.Interface(self.bus.get_object('org.bluez',
                                             self.dev_path), self.ADAPTER_IFACE)
         self.adapter_property = dbus.Interface(self.bus.get_object('org.bluez',
                                             self.dev_path), self.DBUS_PROP_IFACE)
@@ -156,25 +144,14 @@ class BTKbDevice:
 
         self.register_hid_profile()
 
-        # Set the Bluetooth device configuration
-        try: 
-            self.alias = plugins.loaded['plover_link'].options['bt_device_name']
-        except:
-            self.alias = 'Stenogotchi'
+        self.alias = 'Stenogotchi'
         self.discoverabletimeout = 0
         self.discoverable = True
         self.bthost_mac = None
         self.bthost_name = ""
 
-        # Get list of Bluetooth devices to auto connect to
-        bt_autoconnect_str = plugins.loaded['plover_link'].options['bt_autoconnect_mac']
-        if bt_autoconnect_str:
-            self.bt_autoconnect_list = list(map(str.strip, bt_autoconnect_str.split(',')))
-        else:
-            self.bt_autoconnect_list = None
-
         logging.info('[plover_link] Configured BT device with name {}'.format(self.alias))
-    
+
     def interfaces_added(self, path, device_info):
         pass
 
@@ -191,7 +168,6 @@ class BTKbDevice:
         logging.info('[plover_link] The client has been disconnected')
         self.bthost_mac = None
         self.bthost_name = ""
-        self._agent.set_bt_disconnected()
         # Attempt to auto_connect once, then go back to listening mode
         connected = self.auto_connect()
         if not connected:
@@ -308,7 +284,7 @@ class BTKbDevice:
         except OSError:
             sys.exit('Could not open the sdp record. Exiting...')
 
-        return fh.read()   
+        return fh.read()
 
     def create_ssockets(self):
         """ Create passive listening sockets and close possibly exising ones """
@@ -351,44 +327,19 @@ class BTKbDevice:
 
             self.cinterrupt, cinfo = self.sinterrupt.accept()
             logging.debug('[plover_link] {} connected on the cinterrupt channel'.format(cinfo[0]))
-            
+
             self.bthost_mac = cinfo[0]
             self.bthost_name = self.get_connected_device_name()
 
-            self._agent.set_bt_connected(self.bthost_name)
             self.bt_last_conn = self.bthost_mac
 
         except OSError as ex:
             logging.error(f"[plover_link] Failed to enter listening mode: {ex}")
             logging.info(f"[plover_link] If issue persists, check that your '/lib/systemd/system/bluetooth.service' file still contains 'ExecStart=/usr/lib/bluetooth/bluetoothd -P input'")
 
-
-    # def reconnect(self):
-    #     print("Trying reconnect...")                                                                                                                                                                                  
-    #     if not self.bt_last_conn:
-    #                 return
-    #     logging.info('[plover_link] Waiting 5 seconds before attempting to reconnect to lost BT device...')
-    #     sleep(5)
-    #     for i in range(3):
-    #         try:
-    #             hidHost = self.bt_last_conn
-    #             self.ccontrol = socket.socket(socket.AF_BLUETOOTH,
-    #                             socket.SOCK_SEQPACKET,
-    #                             socket.BTPROTO_L2CAP)
-    #             self.cinterrupt = socket.socket(socket.AF_BLUETOOTH,
-    #                                             socket.SOCK_SEQPACKET,
-    #                                             socket.BTPROTO_L2CAP)
-    #             self.ccontrol.connect((hidHost, self.P_CTRL))
-    #             self.cinterrupt.connect((hidHost, self.P_INTR))
-    #             print("Connected!")
-    #             break
-    #         except Exception as ex:
-    #             logging.info(f"[plover_link] Failed to reconnect, will retry in 5s... Reason: '{ex}'")
-    #             sleep(5)
-
     def auto_connect(self):
         """ Automatically connects to preferred BT devices in listed order. Also handles reconnect attempts at lost connection. """
-        
+
         # Check if we should make a reconnect attempt to previous BT device
         if self.bt_last_conn:
             reconnect = True
@@ -396,15 +347,15 @@ class BTKbDevice:
             reconnect = False
 
         if not self.bt_autoconnect_list and not reconnect:
-            logging.info('[plover_link] No bt_autoconnect_mac set in config. Listening for incoming connections instead...')  
+            logging.info('[plover_link] No bt_autoconnect_mac set in config. Listening for incoming connections instead...')
             return False
         else:
             self.autoconnect_in_progress = True
-           
+
             if reconnect:
                 if not self.bt_last_conn:
                     return False
-                logging.info('[plover_link] Waiting 5 seconds before attempting to reconnect to lost BT device...') 
+                logging.info('[plover_link] Waiting 5 seconds before attempting to reconnect to lost BT device...')
                 sleep(5) # Sleep 5 seconds before attempting a reconnect to lost BT device
                 autoconnect_list = [self.bt_last_conn]
             else:
@@ -417,7 +368,7 @@ class BTKbDevice:
                     self.ccontrol = socket.socket(socket.AF_BLUETOOTH,
                                     socket.SOCK_SEQPACKET,
                                     socket.BTPROTO_L2CAP)
-            
+
                     self.cinterrupt = socket.socket(socket.AF_BLUETOOTH,
                                     socket.SOCK_SEQPACKET,
                                     socket.BTPROTO_L2CAP)
@@ -430,21 +381,17 @@ class BTKbDevice:
                     self.bthost_mac = i
                     self.bt_last_conn = i
                     self.bthost_name = self.get_connected_device_name()
-                    self._agent.set_bt_connected(self.bthost_name)
                     return True # stop trying to auto connect upon success
 
-                
+
                 except Exception as e:
                     if e.__class__.__name__ == "OSError" and str(e) == "[Errno 52] Invalid exchange":
                             self.unpair_device(i)
                             logging.info(f'[plover_link] Invalid handshake exchange with {i}. Unpaired device. Please re-initiate pairing from remote device.')
-                            self._agent._view.on_custom(f"Had to purge {i} due to invalid handshake. Please re-pair us.")
                     elif (e.__class__.__name__ == "PermissionError" and str(e) == "[Errno 13] Permission denied"):
                         logging.info(f'[plover_link] Permission to connect to {i} denied. Ensure device has been paired.')
-                        self._agent._view.on_custom(f"Hey... {i} refused my connection! Please re-pair us.")
                     elif (e.__class__.__name__ == "ConnectionRefusedError" and str(e) == "[Errno 111] Connection refused"):
                         logging.info(f'[plover_link] Connection to {i} refused. Ensure device has been paired and is available.')
-                        self._agent._view.on_custom(f"Hmpf... {i} refused my connection. Ensure device has been paired and is available.")
                     elif e.__class__.__name__ == "OSError" and str(e) == "[Errno 112] Host is down":
                         logging.info(f'[plover_link] Host {i} is down.')
                     else:
@@ -456,17 +403,15 @@ class BTKbDevice:
                     # If all addresses attempted without success
                     if not self.bt_autoconnect_list or reconnect:
                         logging.info('[plover_link] Unsuccessful auto connect attempt. Listening for incoming connections instead...')
-                        # self.ccontrol.close()
-                        # self.cinterrupt.close()
                         self.autoconnect_in_progress = False
                         self.bt_last_conn = None
                         return False
-                    
+
                     sleep(2)
 
     def unpair_device(self, address):
         """ Removes remote device including pairing information """
-        
+
         proxy_object = self.bus.get_object("org.bluez","/")
         manager = dbus.Interface(proxy_object, "org.freedesktop.DBus.ObjectManager")
         managed_objects = manager.GetManagedObjects()
@@ -476,10 +421,10 @@ class BTKbDevice:
                 self.adapter_methods.RemoveDevice(path)
 
 
-    
+
     def get_connected_device_name(self):
         """ Returns name (Alias) of connected BT device """
-        
+
         proxy_object = self.bus.get_object("org.bluez","/")
         manager = dbus.Interface(proxy_object, "org.freedesktop.DBus.ObjectManager")
         managed_objects = manager.GetManagedObjects()
@@ -489,7 +434,7 @@ class BTKbDevice:
                 addr = managed_objects[path].get('org.bluez.Device1', {}).get('Address')
                 alias = managed_objects[path].get('org.bluez.Device1', {}).get('Alias')
                 logging.info(f'[plover_link] Device {alias} [{addr}] is connected')
-        
+
         return alias
 
     def send(self, msg):
@@ -510,135 +455,36 @@ class StenogotchiService(dbus.service.Object):
         logging.info('[plover_link] Setting up Stenogotchi D-Bus service')
         bus_name = dbus.service.BusName('com.github.stenogotchi', bus=dbus.SystemBus())
         dbus.service.Object.__init__(self, bus_name, '/com/github/stenogotchi')
-        
-        self._agent = plugins.loaded['plover_link']._agent
+
         self.device = BTKbDevice()  # create and setup our BTKbDevice
-        self.wpm_top = None
-        
+
     def auto_connect(self):
         """ Connect to preferred bt_mac(s). If unspecified or unavailable fall back to await new and trusted incoming connections """
-        connected = self.device.auto_connect() 
+        connected = self.device.auto_connect()
         if not connected:
             self.device.register_bt_pairing_agent() # Handler for new pairing attempts
             self.device.listen() # Handler for incoming trusted connections
-
 
     @dbus.service.method('com.github.stenogotchi', in_signature='aay')   # array of bytearrays
     def send_keys(self, key_list):
         for key in key_list:
             self.device.send(key)
 
-    @dbus.service.method('com.github.stenogotchi', in_signature='b')    # boolean
-    def plover_is_running(self, b):
-        logging.debug('[plover_link] plover_is_running = ' + str(b))
-        if b:
-            self._agent.set_plover_boot()
-        else:
-            self._agent.set_plover_quit()
-
-    @dbus.service.method('com.github.stenogotchi', in_signature='b')    # boolean
-    def plover_is_ready(self, b):
-        logging.debug('[plover_link] plover_is_ready = ' + str(b))
-        self._agent.set_plover_ready()
-
-    @dbus.service.method('com.github.stenogotchi', in_signature='s')    # string
-    def plover_machine_state(self, s):
-        logging.debug('[plover_link] plover_machine_state = ' + s)
-
-    @dbus.service.method('com.github.stenogotchi', in_signature='b')    # boolean
-    def plover_output_enabled(self, b):
-        logging.debug('[plover_link] plover_output_enabled = ' + str(b))
-
-    @dbus.service.method('com.github.stenogotchi', in_signature='s')    # string
-    def plover_wpm_stats(self, s):
-        logging.debug('[plover_link] plover_wpm_stats = ' + s)
-        wpm = int(s)
-        if not self.wpm_top: 
-            self.wpm_top = wpm
-            self._agent.set_wpm(wpm, self.wpm_top)
-        else:
-            if wpm > self.wpm_top:
-                self.wpm_top = wpm
-                logging.debug(f'[plover_link] new wpm record: {self.wpm_top}')
-                self._agent.set_wpm_record(self.wpm_top)
-            else:
-                self._agent.set_wpm(wpm, self.wpm_top)
-
-    @dbus.service.method('com.github.stenogotchi', in_signature='s')    # string
-    def plover_strokes_stats(self, s):
-        # logging.debug(f"[plover_link] plover_strokes_stats = '{s}'")
-        self._agent.set_strokes(s)
-
-    @dbus.service.method('com.github.stenogotchi', in_signature='s')    # string
-    def send_string_stenogotchi(self, s):
-        plugins.loaded['dict_lookup'].input_handler._on_send_string(s)
-        # logging.debug(f"[plover_link] send_string_stenogotchi = '{s}'")
-
-    @dbus.service.method('com.github.stenogotchi', in_signature='n')    # 16-bit signed int
-    def send_backspaces_stenogotchi(self, n):
-        plugins.loaded['dict_lookup'].input_handler._on_send_backspaces(n)
-        # logging.debug(f"[plover_link] send_backspaces_stenogotchi = '{n}'")
-
-    @dbus.service.method('com.github.stenogotchi', in_signature='s')    # string
-    def send_key_combination_stenogotchi(self, s):
-        plugins.loaded['dict_lookup'].input_handler._on_send_key_combination(s)
-        # logging.debug(f"[plover_link] send_key_combination_stenogotchi = '{s}'")
-    
-    @dbus.service.method('com.github.stenogotchi', in_signature='as')    # list of strings
-    def plover_translation_handler(self, l):
-        plugins.loaded['dict_lookup'].input_handler._on_lookup_results(l)
-        # logging.debug(f"[plover_link] plover_translation_handler = '{l}'")
-        
-    @dbus.service.signal('com.github.stenogotchi', signature='a{sv}')    # dictionary of strings to variants
-    def signal_to_plover(self, message):
-        # The signal is emitted when this method exits
-        pass
-
-class PloverLink(ObjectClass):
-    __autohor__ = 'Anodynous'
-    __version__ = '0.3'
-    __license__ = 'MIT'
-    __description__ = 'This plugin enables connectivity to Plover through D-Bus. Note that it needs root permissions due to using sockets'
-
-    def __init__(self):
-        self._agent = None
-        self.running = False
-        self._stenogotchiservice = None
-        self.mainloop = None
-
-    # called when everything is ready and the main loop is about to start
-    def on_ready(self, agent):
-        self._agent = agent     # used for agent/automata functionsadded to be able to do callbacks to agent events
-
-        DBusGMainLoop(set_as_default=True)
-        self._stenogotchiservice = StenogotchiService()
-        self.mainloop = GLib.MainLoop()
-        
-        try:
-            self.mainloop.run()
-            self.running = True
-            logging.info("[plover_link] PloverLink is up")
-        except:
-            logging.error("[plover_link] Could not start PloverLink")
-
-    def on_plover_ready(self, agent):
-        self._stenogotchiservice.auto_connect()
-    
-    def on_config_changed(self, config):
-        self.config = config
-                    
-    def on_unload(self, ui):
-        self.mainloop.quit()
-
-    def send_signal_to_plover(self, message):
-        self._stenogotchiservice.signal_to_plover(message)
-
 if __name__ == '__main__':
     # The sockets require root permission
     if not os.geteuid() == 0:
         sys.exit('Only root can run this script')
 
+    logging.basicConfig(
+        level=logging.DEBUG,  # Set the logging level to INFO
+        format='%(asctime)s - %(levelname)s - %(message)s',  # Format for log messages
+        handlers=[
+            logging.StreamHandler(sys.stdout)  # Output log messages to stdout
+        ]
+    )
+
     DBusGMainLoop(set_as_default=True)
     stenogotchiservice = StenogotchiService()
+    stenogotchiservice.auto_connect()
     mainloop = GLib.MainLoop()
     mainloop.run()
