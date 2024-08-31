@@ -65,15 +65,6 @@ ui.display.type = "waveshare_2"
 ui.display.color = "black"
 ui.display.clear_at_shutdown = true
 
-# The web UI provides an alternative way of interacting with the device to an eINK display and ButtonSHIM module. Enabling the web UI will also load the buttonshim plugin.
-ui.web.enabled = false
-ui.web.address = "192.168.1.100"
-ui.web.username = "changeme"
-ui.web.password = "changeme"
-ui.web.origin = ""
-ui.web.port = 80
-ui.web.on_frame = ""
-
 # Plugins
 
 # Populate bt_autoconnect_mac with the MAC addresses of devices to attempt auto connecting to at boot. Multiple comma-separated devices in order of priority can be given.
@@ -99,7 +90,7 @@ main.plugins.evdevkb.enabled = true
 # Plugin dict_lookup handles dictionary lookup from all enabled Plover dictionaries.
 main.plugins.dict_lookup.enabled = true
 
-# Plugin upslite provides battery level, charging indicator (+) and auto-shutdown at specified battery level when a UPS-Lite v1.2 module is connected. 
+# Plugin upslite provides battery level, charging indicator (+) and auto-shutdown at specified battery level when a UPS-Lite v1.2 module is connected.
 main.plugins.upslite.enabled = false
 main.plugins.upslite.shutdown_level = 5
 

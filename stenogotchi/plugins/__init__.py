@@ -39,7 +39,7 @@ def toggle_plugin(name, enable=True):
     import stenogotchi
     from stenogotchi.ui import view
     from stenogotchi.utils import save_config
-  
+
     global loaded, database
 
     # log event
@@ -135,10 +135,10 @@ def load_from_path(path, enabled=()):
 def load(config):
     enabled = [name for name, options in config['main']['plugins'].items() if
                'enabled' in options and options['enabled']]
-    
+
     # force enable buttonshim plugin when web ui is enabled
     logging.debug(f"REMOVEME pre status : '{enabled}'")
-    if config['ui']['web']['enabled'] and 'buttonshim' not in enabled:
+    if 'buttonshim' not in enabled:
         enabled.append('buttonshim')
     logging.debug(f"REMOVEME post status : '{enabled}'")
 

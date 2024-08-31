@@ -10,7 +10,6 @@ import stenogotchi.utils as utils
 import stenogotchi.plugins as plugins
 from stenogotchi.voice import Voice
 
-import stenogotchi.ui.web as web
 import stenogotchi.ui.fonts as fonts
 import stenogotchi.ui.faces as faces
 from stenogotchi.ui.components import *
@@ -53,17 +52,17 @@ class View(object):
                                    label_font=fonts.Bold, text_font=fonts.Medium),
 
             'line1': Line(self._layout['line1'], color=BLACK),
- 
+
             'line2': Line(self._layout['line2'], color=BLACK),
- 
+
             'face': Text(value=faces.SLEEP, position=self._layout['face'], color=BLACK, font=fonts.Huge),
- 
+
             'friend_face': Text(value=None, position=self._layout['friend_face'], font=fonts.Bold, color=BLACK),
- 
+
             'friend_name': Text(value=None, position=self._layout['friend_name'], font=fonts.BoldSmall, color=BLACK),
- 
+
             'name': Text(value='%s>' % 'stenogotchi', position=self._layout['name'], color=BLACK, font=fonts.Bold),
- 
+
             'status': Text(value=self._voice.default(),
                            position=self._layout['status']['pos'],
                            color=BLACK,
@@ -75,11 +74,11 @@ class View(object):
             'bthost': LabeledValue(label='BT', value='', color=BLACK,
                                    position=self._layout['bthost']['pos'], label_font=fonts.Bold,
                                    text_font=fonts.Medium, max_length=self._layout['bthost']['max']),
- 
+
             'wifi': LabeledValue(label='WIFI', value='', color=BLACK,
                                    position=self._layout['wifi']['pos'], label_font=fonts.Bold,
                                    text_font=fonts.Medium, max_length=self._layout['wifi']['max']),
- 
+
             'mode': Text(value='NONE', position=self._layout['mode'],
                          font=fonts.Bold, color=BLACK),
         })
@@ -185,7 +184,7 @@ class View(object):
     def wait(self, secs, sleeping=True):
         was_normal = self.is_normal()
         part = secs / 10.0
-        
+
         for step in range(0, 10):
             # if we weren't in a normal state before going
             # to sleep, keep that face and status on for
@@ -283,7 +282,7 @@ class View(object):
         self.set('face', faces.DEBUG)
         self.set('status', self._voice.custom(text))
         self.update()
-    
+
     def on_plover_boot(self):
         face = random.choices([faces.SLEEP, faces.SLEEP2, faces.BORED], weights=[0.6, 0.3, 0.1], k=1)
         self.set('face', face[0])
@@ -343,7 +342,7 @@ class View(object):
         self.set('face', faces.LONELY)
         self.set('status', self._voice.on_wifi_disconnected())
         self.update()
-    
+
     def on_dict_lookup_done(self):
         face = random.choices([faces.AWAKE, faces.LOOK_R_HAPPY, faces.LOOK_L_HAPPY, faces.EXCITED, faces.GRATEFUL], weights=[0.5, 0.2, 0.2, 0.05, 0.05], k=1)
         self.set('face', face[0])
@@ -368,8 +367,6 @@ class View(object):
 
                 for key, lv in state.items():
                     lv.draw(self._canvas, drawer)
-
-                web.update_frame(self._canvas)
 
                 for cb in self._render_cbs:
                     cb(self._canvas)

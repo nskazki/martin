@@ -9,7 +9,6 @@ import _thread
 import stenogotchi
 import stenogotchi.utils as utils
 import stenogotchi.plugins as plugins
-from stenogotchi.ui.web.server import Server
 from stenogotchi.automata import Automata
 #from stenogotchi.log import LastSession
 
@@ -22,7 +21,6 @@ class Agent(Automata):
         self._started_at = time.time()
         self._view = view
         self._view.set_agent(self)
-        self._web_ui = None
         self._wifi_connected = None
 
         self._history = {}
@@ -52,16 +50,13 @@ class Agent(Automata):
 
     def _update_wifi(self):
         status, ip = stenogotchi.get_wifi_status()
-  
+
         if status == 'UP':
             if self._wifi_connected:
                 return
             ssid = stenogotchi.get_wifi_ssid()
             if ssid and ip:
                 self._wifi_connected = True
-                # Create web-ui only once a wifi connection is established
-                if not self._web_ui:
-                    self._web_ui = Server(self, self._config['ui'])
             else:
                 if not ssid:
                     ssid = "[Searching]"

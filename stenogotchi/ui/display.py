@@ -54,12 +54,6 @@ class Display(View):
             self._implementation.render(self._canvas_next)
 
     def _on_view_rendered(self, img):
-        try:
-            if self._config['ui']['web']['on_frame'] != '':
-                os.system(self._config['ui']['web']['on_frame'])
-        except Exception as e:
-            logging.error("%s" % e)
-
         if self._enabled:
             self._canvas = (img if self._rotation == 0 else img.rotate(self._rotation))
             if self._implementation is not None:
