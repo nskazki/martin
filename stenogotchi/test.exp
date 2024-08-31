@@ -1,0 +1,35 @@
+#!/usr/bin/expect -f
+
+log_user 1
+
+set timeout 10
+
+spawn bluetoothctl
+
+expect {
+    -re ".*#*" {
+        send "power on\r"
+    }
+}
+
+expect {
+    -re ".*Changing power on succeeded.*" {
+        send "discoverable on\r"
+    }
+}
+
+expect {
+    -re ".*Changing discoverable on succeeded.*" {
+        send "default-agent\r"
+    }
+}
+
+set timeout -1
+
+while {1} {
+    expect {
+        -re ".*yes/no.*" {
+            send "yes\r"
+        }
+    }
+}
