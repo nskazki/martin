@@ -28,7 +28,7 @@ initialized = False
 current_text = None
 
 walk_step = 1
-walk_limit = 8
+walk_limit = 5
 
 timer_event = threading.Event()
 display_event = threading.Event()
@@ -72,7 +72,7 @@ def manage_frame():
         manage_frame()
     else:
         print(f"Animating {walk_step}")
-        draw_display(with_text(os.path.join(assets, "cat_walk", f"{walk_step}.bmp"), text))
+        draw_display(with_text(os.path.join(assets, "cats", f"{walk_step}.bmp"), text))
         walk_step += 1
         if walk_step > walk_limit:
             walk_step = 1
@@ -142,7 +142,7 @@ def parse_line(input):
     if match:
         return [match.group(1), match.group(2)]
     else:
-        return []
+        return [None, None]
 
 def plan_flush(value):
     global idle_at, updated_at, current_text
