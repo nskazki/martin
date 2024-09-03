@@ -21,13 +21,40 @@ font = ImageFont.truetype(os.path.join(assets, "Sevillana.ttf"), 32)
 base = Image.new("1", (250, 122), 255)
 base.paste(Image.open(os.path.join(assets, "rina.bmp")), (0, 0))
 
-partial_update_initialized = False
+ip = None
+bt = None
+
+idling = True
+initialized = False
+
+walk_step = 1
+walk_limit = 8
+chaos_event = threading.Event()
 
 def spawn(target):
     thread = threading.Thread(target=target)
     thread.daemon = True
     thread.start()
     return thread
+
+def do_chaos():
+    global walk_step
+    chaos_event.clear()
+
+    if idling:
+        image = Image.open(os.path.join(assets, "cat_walk", f"{walk_step}.bmp"))
+        if walk_step == 1:
+            epd.init()
+            epd.displayPartBaseImage(epd.getbuffer(image))
+        elif walk_step <= 8:
+            epd.displayPartial(epd.getbuffer(image))
+
+        walk_step += 1
+        sleep(1)
+        do_chaos()
+    else:
+        chaos_event.wait()
+        do_chaos()
 
 def listen_to_stdin():
     while True:
@@ -47,7 +74,7 @@ def listen_to_socket():
             data = connection.recv(1024)
             if data:
                 try:
-                    input = data.decode('utf-8')
+                    input = data.decode("utf-8")
                     print(f"Processing {input}")
                     process_lines(input)
                 except Exception as e:
@@ -71,17 +98,21 @@ def process_lines(lines):
         process_line(line)
 
 def process_line(line):
-    text = extract_text(line)
+    value = extract_text(line)
     if line.startswith("Show:"):
-        show(text)
-    elif line.startswith("Init:"):
-        init(text)
-    elif line.startswith("Step:"):
-        step(text)
+        show(value)
+    elif line.startswith("Draw:"):
+        draw(value)
     elif line.startswith("Stop!"):
         stop()
+    elif line.startswith("Idle!"):
+        idle()
+    elif line.startswith("IP:"):
+        save("ip", value)
+    elif line.startswith("BT:"):
+        save("bt", value)
     else:
-        step(line)
+        draw(line)
 
 def extract_text(input):
     match = re.match(r"\w+:\s*(.*)", input)
@@ -89,27 +120,52 @@ def extract_text(input):
         return match.group(1)
 
 def show(text):
-    init(text)
-    stop()
+    global idling
+    idling = False
+    draw_display(text)
+    stop_display()
 
-def init(text):
-    global partial_update_initialized
-    partial_update_initialized = True
+def draw(text):
+    global idling
+    idling = False
+    draw_display(text)
+
+def stop():
+    stop_display()
+
+def idle():
+    global idling
+    idling = True
+    chaos_event.set()
+
+def save(what, value):
+    global ip, bt
+
+    if what == "ip":
+        ip = value
+    elif what == "bt":
+        bt = value
+
+    chaos_event.set()
+
+def draw_display(text):
+    if initialized:
+        epd.displayPartial(epd.getbuffer(with_text(text)))
+    else:
+        init_display(text)
+
+def init_display(text):
+    global initialized
+    initialized = True
     epd.init()
     epd.displayPartBaseImage(epd.getbuffer(with_text(text)))
 
-def step(text):
-    if partial_update_initialized:
-        epd.displayPartial(epd.getbuffer(with_text(text)))
-    else:
-        init(text)
-
-def stop():
-    global partial_update_initialized
-    partial_update_initialized = False
+def stop_display():
+    global initialized
+    initialized = False
     epd.sleep()
 
-def kill():
+def exit_display():
     print("Exiting the EPD module")
     epd2in13_V4.epdconfig.module_exit(cleanup=True)
 
@@ -119,10 +175,12 @@ def with_text(text):
     draw.text((0, 0), text, font=font, fill=0)
     return copy
 
-atexit.register(kill)
+atexit.register(exit_display)
 
+chaos_thread = spawn(do_chaos)
 stdin_thread = spawn(listen_to_stdin)
 socket_thread = spawn(listen_to_socket)
 
+chaos_thread.join()
 stdin_thread.join()
 socket_thread.join()
