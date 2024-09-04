@@ -18,19 +18,36 @@ sys.path.append(libdir)
 
 from waveshare_epd import epd2in13_V4
 
+LOW_CHANCE = 7
+FAIR_CHANCE = 1
+
+FRAME_INTERVAL = 0.5
+TIMER_INTERVAL = 0.25
+
+IDLE_DELAY = 120
+CLEAR_DELAY = 30
+ABORT_DELAY = 30
+
 STEP_COUNT = 4
 TRUNCAT_AT = 18
-IDLE_DELAY = 5
-CLEAR_DELAY = 3
-TIMER_INTERVAL = 0.25
-FRAME_INTERVAL = 0.5
 
 STATE_CLIMB = "cat_climb"
-STATE_LIE = "cat_lie"
-STATE_WALK = "cat_walk"
-STATE_SIT = "cat_sit"
-STATE_RUN = "cat_run"
+STATE_SIT_LEFT = "cat_sit_left"
+STATE_LIE_DOWN_LEFT = "cat_lie_down_left"
+STATE_SLEEP_LEFT = "cat_sleep_left"
+STATE_RUN_LEFT = "cat_run_left"
+STATE_SIT_RIGHT = "cat_sit_right"
+STATE_LIE_DOWN_RIGHT = "cat_lie_down_right"
+STATE_SLEEP_RIGHT = "cat_sleep_right"
+STATE_RUN_RIGHT = "cat_run_right"
 STATE_JUMP = "cat_jump"
+
+IDLE_STATES = [
+    STATE_SLEEP_LEFT,
+    STATE_SLEEP_RIGHT,
+    STATE_LIE_DOWN_LEFT,
+    STATE_LIE_DOWN_RIGHT
+]
 
 epd = epd2in13_V4.EPD()
 font = ImageFont.truetype(os.path.join(assets, "Sevillana.ttf"), 32)
@@ -87,7 +104,7 @@ def manage_frame():
             text = current_text or current_bt or current_ip or "You are beautiful"
             text = truncate(text)
 
-            if not current_text and is_older_than(updated_at, IDLE_DELAY):
+            if not current_text and is_older_than(updated_at, IDLE_DELAY) and is_idle_state():
                 print("Have been idle for a while")
                 draw_display(with_text("rina.bmp", text))
                 freeze_display()
@@ -96,10 +113,6 @@ def manage_frame():
                 frame = (current_step % STEP_COUNT) + 1
                 draw_display(with_text(f"{current_state}/{frame}.bmp", text))
                 switch_state()
-                if not current_text:
-                    freeze_in = updated_at - seconds_ago(IDLE_DELAY)
-                    if freeze_in >= timedelta(seconds=0):
-                        print(f"Freeze in {freeze_in}")
 
             frame_event.wait()
         except Exception as e:
@@ -177,7 +190,7 @@ def plan_flush(value):
 
 def plan_draw(value):
     new_text(value)
-    new_clear_at(None)
+    new_clear_at(ABORT_DELAY)
 
 def plan_clear():
     new_text(None)
@@ -228,36 +241,55 @@ def new_clear_at(seconds):
         clear_at = None
     timer_event.set()
 
+def is_idle_state():
+    return (current_state in IDLE_STATES) and (current_step % STEP_COUNT) + 1 == STEP_COUNT
+
 def switch_state():
     global current_state
 
     if current_step % STEP_COUNT != 0:
         return
 
-    if current_state == STATE_CLIMB or current_state == STATE_RUN:
-        if random.randint(0, 1) == 0:
-            current_state = STATE_LIE
+    if current_state == STATE_CLIMB or current_state == STATE_RUN_RIGHT:
+        if low_chance():
+            current_state = STATE_RUN_LEFT
         else:
-            current_state = STATE_WALK
-    elif current_state == STATE_LIE:
-        if random.randint(0, 5) == 0:
-            current_state = STATE_LIE
-        else:
-            current_state = STATE_WALK
-    elif current_state == STATE_WALK:
-        if random.randint(0, 5) == 0:
-            current_state = STATE_JUMP
-        else:
-            current_state = STATE_SIT
+            current_state = STATE_SIT_LEFT
+    elif current_state == STATE_SIT_LEFT:
+        if fair_chance():
+            current_state = STATE_LIE_DOWN_LEFT
+        elif low_chance():
+            current_state = STATE_RUN_LEFT
+    elif current_state == STATE_LIE_DOWN_LEFT:
+        if low_chance():
+            current_state = STATE_SLEEP_LEFT
+        elif low_chance():
+            current_state = STATE_SIT_LEFT
+    elif current_state == STATE_SLEEP_LEFT:
+        if low_chance():
+            current_state = STATE_LIE_DOWN_LEFT
+    elif current_state == STATE_RUN_LEFT:
+        # if low_chance():
+        current_state = STATE_JUMP
+        # else:
+        #     current_state = STATE_SIT_RIGHT
     elif current_state == STATE_JUMP:
         current_state = STATE_CLIMB
-    elif current_state == STATE_SIT:
-        if random.randint(0, 5) == 0:
-            current_state = STATE_SIT
-        elif random.randint(0, 1) == 0:
-            current_state = STATE_RUN
-        else:
+    elif current_state == STATE_SIT_RIGHT:
+        if fair_chance():
+            current_state = STATE_LIE_DOWN_RIGHT
+        elif low_chance():
             current_state = STATE_JUMP
+        elif low_chance():
+            current_state = STATE_RUN_RIGHT
+    elif current_state == STATE_LIE_DOWN_RIGHT:
+        if low_chance():
+            current_state = STATE_SLEEP_RIGHT
+        elif low_chance():
+            current_state = STATE_SIT_RIGHT
+    elif current_state == STATE_SLEEP_RIGHT:
+        if low_chance():
+            current_state = STATE_LIE_DOWN_RIGHT
 
     print(f"Switched to {current_state}")
 
@@ -288,7 +320,8 @@ def freeze_display():
 
 def halt_display():
     print("Exiting the EPD module")
-    epd.sleep()
+    if display_ready:
+        epd.sleep()
     epd2in13_V4.epdconfig.module_exit(cleanup=True)
 
 def with_text(asset_path, text):
@@ -298,6 +331,12 @@ def with_text(asset_path, text):
     draw = ImageDraw.Draw(base)
     draw.text((0, 0), text, font=font, fill=0)
     return base
+
+def low_chance():
+    return random.randint(0, LOW_CHANCE) == 0
+
+def fair_chance():
+    return random.randint(0, FAIR_CHANCE) == 0
 
 def is_past(time):
     return time and time <= datetime.now()
