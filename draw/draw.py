@@ -4,6 +4,7 @@ import sys
 import socket
 import select
 import atexit
+import random
 import traceback
 import threading
 from glob import glob
@@ -17,11 +18,19 @@ sys.path.append(libdir)
 
 from waveshare_epd import epd2in13_V4
 
+STEP_COUNT = 4
 TRUNCAT_AT = 18
 IDLE_DELAY = 5
 CLEAR_DELAY = 3
 TIMER_INTERVAL = 0.25
 FRAME_INTERVAL = 0.5
+
+STATE_CLIMB = "cat_climb"
+STATE_LIE = "cat_lie"
+STATE_WALK = "cat_walk"
+STATE_SIT = "cat_sit"
+STATE_RUN = "cat_run"
+STATE_JUMP = "cat_jump"
 
 epd = epd2in13_V4.EPD()
 font = ImageFont.truetype(os.path.join(assets, "Sevillana.ttf"), 32)
@@ -33,9 +42,8 @@ updated_at = datetime.now()
 current_bt = None
 current_ip = None
 current_text = None
-
-step_count = 8
 current_step = 0
+current_state = STATE_CLIMB
 
 frame_event = threading.Event()
 timer_event = threading.Event()
@@ -85,8 +93,9 @@ def manage_frame():
                 freeze_display()
             else:
                 new_step_at(FRAME_INTERVAL)
-                animation = (current_step % step_count) + 1
-                draw_display(with_text(f"cats/{animation}.bmp", text))
+                frame = (current_step % STEP_COUNT) + 1
+                draw_display(with_text(f"{current_state}/{frame}.bmp", text))
+                switch_state()
                 if not current_text:
                     freeze_in = updated_at - seconds_ago(IDLE_DELAY)
                     if freeze_in >= timedelta(seconds=0):
@@ -218,6 +227,39 @@ def new_clear_at(seconds):
     else:
         clear_at = None
     timer_event.set()
+
+def switch_state():
+    global current_state
+
+    if current_step % STEP_COUNT != 0:
+        return
+
+    if current_state == STATE_CLIMB or current_state == STATE_RUN:
+        if random.randint(0, 1) == 0:
+            current_state = STATE_LIE
+        else:
+            current_state = STATE_WALK
+    elif current_state == STATE_LIE:
+        if random.randint(0, 5) == 0:
+            current_state = STATE_LIE
+        else:
+            current_state = STATE_WALK
+    elif current_state == STATE_WALK:
+        if random.randint(0, 5) == 0:
+            current_state = STATE_JUMP
+        else:
+            current_state = STATE_SIT
+    elif current_state == STATE_JUMP:
+        current_state = STATE_CLIMB
+    elif current_state == STATE_SIT:
+        if random.randint(0, 5) == 0:
+            current_state = STATE_SIT
+        elif random.randint(0, 1) == 0:
+            current_state = STATE_RUN
+        else:
+            current_state = STATE_JUMP
+
+    print(f"Switched to {current_state}")
 
 def seconds_ago(seconds):
     return datetime.now() - timedelta(seconds=seconds)
