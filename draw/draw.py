@@ -10,6 +10,7 @@ import threading
 from glob import glob
 from time import sleep
 from PIL import Image,ImageDraw,ImageFont
+from collections import deque
 from datetime import datetime, timedelta
 
 libdir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "lib")
@@ -31,23 +32,54 @@ ABORT_DELAY = 30
 STEP_COUNT = 4
 TRUNCAT_AT = 18
 
+CAN = "can"
+LOW = "low"
+FAIR = "fair"
+DEFAULT = "default"
+
 STATE_CLIMB = "cat_climb"
 STATE_SIT_LEFT = "cat_sit_left"
 STATE_LIE_DOWN_LEFT = "cat_lie_down_left"
 STATE_SLEEP_LEFT = "cat_sleep_left"
+STATE_LOOK_UP_LEFT = "cat_look_up_left"
 STATE_RUN_LEFT = "cat_run_left"
-STATE_SIT_RIGHT = "cat_sit_right"
-STATE_LIE_DOWN_RIGHT = "cat_lie_down_right"
-STATE_SLEEP_RIGHT = "cat_sleep_right"
-STATE_RUN_RIGHT = "cat_run_right"
+# STATE_SIT_RIGHT = "cat_sit_right"
+# STATE_LIE_DOWN_RIGHT = "cat_lie_down_right"
+# STATE_SLEEP_RIGHT = "cat_sleep_right"
+# STATE_RUN_RIGHT = "cat_run_right"
 STATE_JUMP = "cat_jump"
 
-IDLE_STATES = [
-    STATE_SLEEP_LEFT,
-    STATE_SLEEP_RIGHT,
-    STATE_LIE_DOWN_LEFT,
-    STATE_LIE_DOWN_RIGHT
-]
+RUN_STATES = [STATE_RUN_LEFT]
+SLEEP_STATES = [STATE_SLEEP_LEFT]
+LOOK_UP_STATES = [STATE_LOOK_UP_LEFT]
+
+STATES = {
+    STATE_CLIMB: {
+        CAN: [STATE_LOOK_UP_LEFT, STATE_LIE_DOWN_LEFT],
+        LOW: STATE_RUN_LEFT,
+        DEFAULT: STATE_SIT_LEFT
+    },
+    STATE_SIT_LEFT: {
+        CAN: STATE_LOOK_UP_LEFT,
+        LOW: [STATE_LIE_DOWN_LEFT, STATE_RUN_LEFT],
+    },
+    STATE_LIE_DOWN_LEFT: {
+        CAN: STATE_LOOK_UP_LEFT,
+        LOW: [STATE_SLEEP_LEFT, STATE_SIT_LEFT]
+    },
+    STATE_SLEEP_LEFT: {
+        LOW: STATE_LIE_DOWN_LEFT
+    },
+    STATE_LOOK_UP_LEFT: {
+        LOW: STATE_SIT_LEFT
+    },
+    STATE_RUN_LEFT: {
+        DEFAULT: STATE_JUMP
+    },
+    STATE_JUMP: {
+        DEFAULT: STATE_CLIMB
+    }
+}
 
 epd = epd2in13_V4.EPD()
 font = ImageFont.truetype(os.path.join(assets, "Sevillana.ttf"), 32)
@@ -61,6 +93,7 @@ current_ip = None
 current_text = None
 current_step = 0
 current_state = STATE_CLIMB
+target_states = None
 
 frame_event = threading.Event()
 timer_event = threading.Event()
@@ -84,9 +117,15 @@ def manage_timer():
                 new_clear_at(None)
 
             if is_past(step_at):
-                print("Incrementing the step")
+                if cycled_through_state():
+                    if in_target_state():
+                        new_target_state(None)
+                        print(f"Cleared the target state")
+                    switch_state()
+                    print(f"Switched to {current_state}")
                 new_step(current_step + 1)
                 new_step_at(None)
+                print(f"Incremented {current_step}")
 
             if clear_at or step_at:
                 sleep(TIMER_INTERVAL)
@@ -104,7 +143,10 @@ def manage_frame():
             text = current_text or current_bt or current_ip or "You are beautiful"
             text = truncate(text)
 
-            if not current_text and is_older_than(updated_at, IDLE_DELAY) and is_idle_state():
+            can_idle = cycled_through_state() and in_one_of(SLEEP_STATES)
+            should_idle = not current_text and is_older_than(updated_at, IDLE_DELAY)
+
+            if can_idle and should_idle:
                 print("Have been idle for a while")
                 draw_display(with_text("rina.bmp", text))
                 freeze_display()
@@ -112,7 +154,6 @@ def manage_frame():
                 new_step_at(FRAME_INTERVAL)
                 frame = (current_step % STEP_COUNT) + 1
                 draw_display(with_text(f"{current_state}/{frame}.bmp", text))
-                switch_state()
 
             frame_event.wait()
         except Exception as e:
@@ -164,7 +205,13 @@ def process_lines(lines):
 
 def process_line(line):
     what, value = parse_line(line)
-    if line.startswith("Flush:"):
+    if line.startswith("Run!"):
+        plan_run()
+    elif line.startswith("Sleep!"):
+        plan_sleep()
+    elif line.startswith("Look Up!"):
+        plan_look_up()
+    elif line.startswith("Flush:"):
         plan_flush(value)
     elif line.startswith("Draw:"):
         plan_draw(value)
@@ -184,34 +231,47 @@ def parse_line(input):
     else:
         return [None, None]
 
+def plan_run():
+    new_target_state(RUN_STATES)
+
+def plan_sleep():
+    new_target_state(SLEEP_STATES)
+
+def plan_look_up():
+    new_target_state(LOOK_UP_STATES)
+
 def plan_flush(value):
     new_text(value)
     new_clear_at(CLEAR_DELAY)
+    new_target_state(LOOK_UP_STATES)
 
 def plan_draw(value):
     new_text(value)
     new_clear_at(ABORT_DELAY)
+    new_target_state(LOOK_UP_STATES)
 
 def plan_clear():
     new_text(None)
     new_clear_at(None)
+    new_target_state(None)
 
 def plan_stat_update(what, value):
+    new_target_state(LOOK_UP_STATES)
     if what == "IP":
         new_ip(value)
     elif what == "BT":
         new_bt(value)
 
 def new_ip(value):
-    global updated_at, current_ip
+    global current_ip
+    touch_updated_at()
     current_ip = value
-    updated_at = datetime.now()
     frame_event.set()
 
 def new_bt(value):
-    global updated_at, current_bt
+    global current_bt
+    touch_updated_at()
     current_bt = value
-    updated_at = datetime.now()
     frame_event.set()
 
 def new_step(value):
@@ -220,10 +280,17 @@ def new_step(value):
     frame_event.set()
 
 def new_text(value):
-    global updated_at, current_text
-    updated_at = datetime.now()
+    global current_text
+    touch_updated_at()
     current_text = value
     frame_event.set()
+
+def new_target_state(states):
+    global target_states
+    touch_updated_at()
+    target_states = states
+    frame_event.set()
+    print(f"Targets {states}")
 
 def new_step_at(seconds):
     global step_at
@@ -241,57 +308,74 @@ def new_clear_at(seconds):
         clear_at = None
     timer_event.set()
 
-def is_idle_state():
-    return (current_state in IDLE_STATES) and (current_step % STEP_COUNT) + 1 == STEP_COUNT
+def touch_updated_at():
+    global updated_at
+    updated_at = datetime.now()
+
+def cycled_through_state():
+    return (current_step % STEP_COUNT) + 1 == STEP_COUNT
+
+def in_one_of(states):
+    return current_state in states
+
+def in_target_state():
+    if target_states:
+        return in_one_of(target_states)
+    else:
+        return False
 
 def switch_state():
     global current_state
 
-    if current_step % STEP_COUNT != 0:
-        return
+    if target_states:
+        path = bfs_path(STATES, current_state, target_states)
+        current_state = path[1]
+    else:
+        rules = STATES[current_state]
 
-    if current_state == STATE_CLIMB or current_state == STATE_RUN_RIGHT:
-        if low_chance():
-            current_state = STATE_RUN_LEFT
+        for state in wrap_list(rules.get(LOW)):
+            if low_chance():
+                current_state = state
+                return
+
+        for state in wrap_list(rules.get(FAIR)):
+            if fair_chance():
+                current_state = state
+                return
+
+        default = rules.get(DEFAULT)
+        if default:
+            current_state = default
+
+def bfs_path(graph, start, targets):
+    queue = deque([(start, [start])])
+    visited = set()
+    while queue:
+        (node, path) = queue.popleft()
+        if node in targets:
+            return path
+        if node not in visited:
+            visited.add(node)
+            for neighbor in flatten_list(graph[node].values()):
+                if neighbor not in visited:
+                    queue.append((neighbor, path + [neighbor]))
+
+def wrap_list(value):
+    if isinstance(value, list):
+        return value
+    elif value == None:
+        return []
+    else:
+        return [value]
+
+def flatten_list(nested_list):
+    flattened = []
+    for item in nested_list:
+        if isinstance(item, list):
+            flattened.extend(flatten_list(item))
         else:
-            current_state = STATE_SIT_LEFT
-    elif current_state == STATE_SIT_LEFT:
-        if fair_chance():
-            current_state = STATE_LIE_DOWN_LEFT
-        elif low_chance():
-            current_state = STATE_RUN_LEFT
-    elif current_state == STATE_LIE_DOWN_LEFT:
-        if low_chance():
-            current_state = STATE_SLEEP_LEFT
-        elif low_chance():
-            current_state = STATE_SIT_LEFT
-    elif current_state == STATE_SLEEP_LEFT:
-        if low_chance():
-            current_state = STATE_LIE_DOWN_LEFT
-    elif current_state == STATE_RUN_LEFT:
-        # if low_chance():
-        current_state = STATE_JUMP
-        # else:
-        #     current_state = STATE_SIT_RIGHT
-    elif current_state == STATE_JUMP:
-        current_state = STATE_CLIMB
-    elif current_state == STATE_SIT_RIGHT:
-        if fair_chance():
-            current_state = STATE_LIE_DOWN_RIGHT
-        elif low_chance():
-            current_state = STATE_JUMP
-        elif low_chance():
-            current_state = STATE_RUN_RIGHT
-    elif current_state == STATE_LIE_DOWN_RIGHT:
-        if low_chance():
-            current_state = STATE_SLEEP_RIGHT
-        elif low_chance():
-            current_state = STATE_SIT_RIGHT
-    elif current_state == STATE_SLEEP_RIGHT:
-        if low_chance():
-            current_state = STATE_LIE_DOWN_RIGHT
-
-    print(f"Switched to {current_state}")
+            flattened.append(item)
+    return flattened
 
 def seconds_ago(seconds):
     return datetime.now() - timedelta(seconds=seconds)
