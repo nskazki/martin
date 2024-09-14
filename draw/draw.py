@@ -1,26 +1,17 @@
-import os
 import re
-import sys
-import socket
-import select
 import atexit
-import random
 import traceback
 import threading
-from glob import glob
+from text_helpers import truncate
+from list_helpers import wrap_list
+from time_helpers import seconds_from_now, is_past, is_older_than
+from state_helpers import next_state, CAN, LOW, FAIR, DEFAULT
+from display_helpers import draw_display, freeze_display, halt_display, with_text
+from spawn import spawn
+from spawn_stdin import spawn_stdin
+from spawn_socket import spawn_socket
 from time import sleep
-from PIL import Image,ImageDraw,ImageFont
-from collections import deque
-from datetime import datetime, timedelta
-
-libdir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "lib")
-assets = os.path.join(os.path.dirname(os.path.realpath(__file__)), "assets")
-sys.path.append(libdir)
-
-from waveshare_epd import epd2in13_V4
-
-LOW_CHANCE = 7
-FAIR_CHANCE = 1
+from datetime import datetime
 
 FRAME_INTERVAL = 0.5
 TIMER_INTERVAL = 0.25
@@ -31,11 +22,6 @@ ABORT_DELAY = 30
 
 STEP_COUNT = 4
 TRUNCAT_AT = 18
-
-CAN = "can"
-LOW = "low"
-FAIR = "fair"
-DEFAULT = "default"
 
 STATE_CLIMB = "cat_climb"
 STATE_SIT_LEFT = "cat_sit_left"
@@ -55,7 +41,6 @@ REWINDABLE_STATES = [STATE_SIT_LEFT, STATE_LIE_DOWN_LEFT, STATE_SLEEP_LEFT, STAT
 
 STATES = {
     STATE_CLIMB: {
-        CAN: STATE_LOOK_UP_LEFT,
         LOW: STATE_RUN_LEFT,
         DEFAULT: STATE_SIT_LEFT
     },
@@ -79,16 +64,12 @@ STATES = {
         LOW: [STATE_RUN_RIGHT, STATE_JUMP]
     },
     STATE_RUN_RIGHT: {
-        CAN: STATE_LOOK_UP_LEFT,
         DEFAULT: STATE_SIT_LEFT
     },
     STATE_JUMP: {
         DEFAULT: STATE_CLIMB
     }
 }
-
-epd = epd2in13_V4.EPD()
-font = ImageFont.truetype(os.path.join(assets, "Sevillana.ttf"), 32)
 
 step_at = None
 clear_at = None
@@ -103,14 +84,6 @@ target_states = []
 
 frame_event = threading.Event()
 timer_event = threading.Event()
-
-display_ready = False
-
-def spawn(target, *args):
-    thread = threading.Thread(target=target, args=args)
-    thread.daemon = True
-    thread.start()
-    return thread
 
 def manage_timer():
     while True:
@@ -151,7 +124,7 @@ def manage_frame():
             frame_event.clear()
 
             text = current_text or current_bt or current_ip or "You are beautiful"
-            text = truncate(text)
+            text = truncate(text, TRUNCAT_AT)
 
             can_idle = cycled_through_state() and in_one_of(SLEEP_STATES)
             should_idle = not current_text and is_older_than(updated_at, IDLE_DELAY)
@@ -169,52 +142,6 @@ def manage_frame():
         except Exception as e:
             print(f"An unexpected error occurred in the frame manager: {e}")
             traceback.print_exc()
-
-def listen_to_stdin():
-    while True:
-        try:
-            input = sys.stdin.readline().strip()
-            process_lines(input)
-        except Exception as e:
-            print(f"An unexpected error occurred in the stdin listener: {e}")
-            traceback.print_exc()
-
-def listen_to_socket():
-    socket_path = "/tmp/example_socket"
-    socket = create_socket(socket_path)
-    while True:
-        connection, _ = socket.accept()
-        print(f"Handling a connection")
-        spawn(listen_to_connection, connection)
-
-def listen_to_connection(connection):
-    while True:
-        data = connection.recv(1024)
-        if data:
-            try:
-                input = data.decode("utf-8")
-                print(f"Processing {input}")
-                process_lines(input)
-            except Exception as e:
-                print(f"An unexpected error occurred in the socket listener: {e}")
-                traceback.print_exc()
-        else:
-            print(f"Closing the connection")
-            connection.close()
-            break
-
-def create_socket(socket_path):
-    if os.path.exists(socket_path):
-        os.remove(socket_path)
-
-    server_sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    server_sock.bind(socket_path)
-    server_sock.listen(1)
-    return server_sock
-
-def process_lines(lines):
-    for line in lines.splitlines():
-        process_line(line)
 
 def process_line(line):
     what, value = parse_line(line)
@@ -313,6 +240,7 @@ def new_target_state(states):
     touch_updated_at()
     target_states = wrap_list(states)
     timer_event.set()
+    frame_event.set()
 
 def new_step_at(seconds):
     global step_at
@@ -354,132 +282,14 @@ def should_rewind():
 
 def switch_state():
     global current_state
-
-    if target_states:
-        path = bfs_path(current_state, target_states)
-        if len(path) >= 2:
-            current_state = path[1]
-            return
-        else:
-            print(f"Couldn't find a path from {current_state} to {target_states}")
-
-    rules = read_rules(current_state)
-
-    for state in wrap_list(rules.get(LOW)):
-        if low_chance():
-            current_state = state
-            return
-
-    for state in wrap_list(rules.get(FAIR)):
-        if fair_chance():
-            current_state = state
-            return
-
-    default = rules.get(DEFAULT)
-    if default:
-        current_state = default
-
-def bfs_path(start, targets):
-    queue = deque([(start, [start])])
-    visited = set()
-    while queue:
-        (state, path) = queue.popleft()
-        if state in targets and len(path) != 1:
-            return path
-        if state not in visited:
-            visited.add(state)
-            for neighbor in flatten_list(read_rules(state).values()):
-                if neighbor not in visited:
-                    queue.append((neighbor, path + [neighbor]))
-    return []
-
-def read_rules(state):
-    result = STATES[state]
-    if isinstance(result, str):
-        return read_rules(result)
-    else:
-        return result
-
-def wrap_list(value):
-    if isinstance(value, list):
-        return value
-    elif value == None:
-        return []
-    else:
-        return [value]
-
-def flatten_list(nested_list):
-    flattened = []
-    for item in nested_list:
-        if isinstance(item, list):
-            flattened.extend(flatten_list(item))
-        else:
-            flattened.append(item)
-    return flattened
-
-def seconds_ago(seconds):
-    return datetime.now() - timedelta(seconds=seconds)
-
-def seconds_from_now(seconds):
-    return datetime.now() + timedelta(seconds=seconds)
-
-def draw_display(image):
-    if display_ready:
-        epd.displayPartial(epd.getbuffer(image))
-    else:
-        init_display(image)
-
-def init_display(image):
-    global display_ready
-    print("Initalizing display")
-    display_ready = True
-    epd.init()
-    epd.displayPartBaseImage(epd.getbuffer(image))
-
-def freeze_display():
-    global display_ready
-    print("Freezing display")
-    display_ready = False
-    epd.sleep()
-
-def halt_display():
-    print("Exiting the EPD module")
-    if display_ready:
-        epd.sleep()
-    epd2in13_V4.epdconfig.module_exit(cleanup=True)
-
-def with_text(asset_path, text):
-    path = os.path.join(assets, asset_path)
-    base = Image.new("1", (250, 122), 255)
-    base.paste(Image.open(path), (0, 0))
-    draw = ImageDraw.Draw(base)
-    draw.text((0, 0), text, font=font, fill=0)
-    return base
-
-def low_chance():
-    return random.randint(0, LOW_CHANCE) == 0
-
-def fair_chance():
-    return random.randint(0, FAIR_CHANCE) == 0
-
-def is_past(time):
-    return time and time <= datetime.now()
-
-def is_older_than(time, seconds):
-    return time and time <= seconds_ago(seconds)
-
-def truncate(text):
-    if len(text) >= TRUNCAT_AT:
-        return text[:TRUNCAT_AT] + "..."
-    else:
-        return text
+    current_state = next_state(STATES, current_state, target_states)
 
 atexit.register(halt_display)
 
 frame_thread = spawn(manage_frame)
 timer_thread = spawn(manage_timer)
-stdin_thread = spawn(listen_to_stdin)
-socket_thread = spawn(listen_to_socket)
+stdin_thread = spawn_stdin(process_line)
+socket_thread = spawn_socket(process_line)
 
 frame_thread.join()
 timer_thread.join()
