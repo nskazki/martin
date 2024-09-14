@@ -105,8 +105,8 @@ timer_event = threading.Event()
 
 display_ready = False
 
-def spawn(target):
-    thread = threading.Thread(target=target)
+def spawn(target, *args):
+    thread = threading.Thread(target=target, args=args)
     thread.daemon = True
     thread.start()
     return thread
@@ -179,20 +179,23 @@ def listen_to_socket():
     while True:
         connection, _ = socket.accept()
         print(f"Handling a connection")
-        while True:
-            data = connection.recv(1024)
-            if data:
-                try:
-                    input = data.decode("utf-8")
-                    print(f"Processing {input}")
-                    process_lines(input)
-                except Exception as e:
-                    print(f"An unexpected error occurred in the socket listener: {e}")
-                    traceback.print_exc()
-            else:
-                print(f"Closing the connection")
-                connection.close()
-                break
+        spawn(listen_to_connection, connection)
+
+def listen_to_connection(connection):
+    while True:
+        data = connection.recv(1024)
+        if data:
+            try:
+                input = data.decode("utf-8")
+                print(f"Processing {input}")
+                process_lines(input)
+            except Exception as e:
+                print(f"An unexpected error occurred in the socket listener: {e}")
+                traceback.print_exc()
+        else:
+            print(f"Closing the connection")
+            connection.close()
+            break
 
 def create_socket(socket_path):
     if os.path.exists(socket_path):
