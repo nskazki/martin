@@ -212,8 +212,10 @@ def process_lines(lines):
 
 def process_line(line):
     what, value = parse_line(line)
-    if line.startswith("Run!"):
-        plan_run()
+    if line.startswith("Run Left!"):
+        plan_run_left()
+    elif line.startswith("Run Right!"):
+        plan_run_right()
     elif line.startswith("Sleep!"):
         plan_sleep()
     elif line.startswith("Look Up!"):
@@ -238,8 +240,11 @@ def parse_line(input):
     else:
         return [None, None]
 
-def plan_run():
-    push_target_state(RUN_STATES)
+def plan_run_left():
+    push_target_state(STATE_RUN_LEFT)
+
+def plan_run_right():
+    push_target_state(STATE_RUN_RIGHT)
 
 def plan_sleep():
     push_target_state(SLEEP_STATES)
@@ -295,7 +300,7 @@ def new_text(value):
 def push_target_state(states):
     global target_states_queue
     touch_updated_at()
-    target_states_queue.append(states)
+    target_states_queue.append(wrap_list(states))
     frame_event.set()
     print(f"Targets {states}")
 
