@@ -50,6 +50,8 @@ STATE_JUMP = "cat_jump"
 RUN_STATES = [STATE_RUN_LEFT, STATE_RUN_RIGHT]
 SLEEP_STATES = [STATE_SLEEP_LEFT]
 LOOK_UP_STATES = [STATE_LOOK_UP_LEFT]
+LIE_DOWN_STATES = [STATE_LIE_DOWN_LEFT]
+REWINDABLE_STATES = [STATE_SIT_LEFT, STATE_LIE_DOWN_LEFT, STATE_SLEEP_LEFT, STATE_LOOK_UP_LEFT, STATE_SIT_RIGHT]
 
 STATES = {
     STATE_CLIMB: {
@@ -62,7 +64,6 @@ STATES = {
         LOW: [STATE_LIE_DOWN_LEFT, STATE_RUN_LEFT],
     },
     STATE_LIE_DOWN_LEFT: {
-        CAN: STATE_LOOK_UP_LEFT,
         LOW: [STATE_SLEEP_LEFT, STATE_SIT_LEFT]
     },
     STATE_SLEEP_LEFT: {
@@ -98,7 +99,7 @@ current_ip = None
 current_text = None
 current_step = 0
 current_state = STATE_CLIMB
-target_states_queue = deque([])
+target_states = []
 
 frame_event = threading.Event()
 timer_event = threading.Event()
@@ -122,12 +123,17 @@ def manage_timer():
                 new_clear_at(None)
 
             if is_past(step_at):
-                if cycled_through_state():
-                    if in_target_state():
-                        shift_target_state()
+                if should_rewind():
+                    target_step = current_step + (STEP_COUNT - current_step % STEP_COUNT)
+                else:
+                    target_step = current_step + 1
+
+                if cycled_through_state() or should_rewind():
+                    wipe_reached_state()
                     switch_state()
                     print(f"Switched to {current_state}")
-                new_step(current_step + 1)
+
+                new_step(target_step)
                 new_step_at(None)
                 print(f"Incremented {current_step}")
 
@@ -216,10 +222,12 @@ def process_line(line):
         plan_run_left()
     elif line.startswith("Run Right!"):
         plan_run_right()
-    elif line.startswith("Sleep!"):
-        plan_sleep()
     elif line.startswith("Look Up!"):
         plan_look_up()
+    elif line.startswith("Lie Down!"):
+        plan_lie_down()
+    elif line.startswith("Sleep!"):
+        plan_sleep()
     elif line.startswith("Flush:"):
         plan_flush(value)
     elif line.startswith("Draw:"):
@@ -241,38 +249,41 @@ def parse_line(input):
         return [None, None]
 
 def plan_run_left():
-    push_target_state(STATE_RUN_LEFT)
+    new_target_state(STATE_RUN_LEFT)
 
 def plan_run_right():
-    push_target_state(STATE_RUN_RIGHT)
-
-def plan_sleep():
-    push_target_state(SLEEP_STATES)
+    new_target_state(STATE_RUN_RIGHT)
 
 def plan_look_up():
-    push_target_state(LOOK_UP_STATES)
+    new_target_state(LOOK_UP_STATES)
+
+def plan_sleep():
+    new_target_state(SLEEP_STATES)
+
+def plan_lie_down():
+    new_target_state(LIE_DOWN_STATES)
 
 def plan_flush(value):
     new_text(value)
     new_clear_at(CLEAR_DELAY)
-    push_target_state(LOOK_UP_STATES)
+    new_target_state(LOOK_UP_STATES)
 
 def plan_draw(value):
     new_text(value)
     new_clear_at(ABORT_DELAY)
-    push_target_state(LOOK_UP_STATES)
+    new_target_state(LOOK_UP_STATES)
 
 def plan_clear():
     new_text(None)
     new_clear_at(None)
-    wipe_target_state()
+    new_target_state(None)
 
 def plan_stat_update(what, value):
-    push_target_state(LOOK_UP_STATES)
     if what == "IP":
         new_ip(value)
     elif what == "BT":
         new_bt(value)
+    new_target_state(LOOK_UP_STATES)
 
 def new_ip(value):
     global current_ip
@@ -297,25 +308,11 @@ def new_text(value):
     current_text = value
     frame_event.set()
 
-def push_target_state(states):
-    global target_states_queue
+def new_target_state(states):
+    global target_states
     touch_updated_at()
-    target_states_queue.append(wrap_list(states))
-    frame_event.set()
-    print(f"Targets {states}")
-
-def shift_target_state():
-    global target_states_queue
-    touch_updated_at()
-    states = target_states_queue.popleft()
-    frame_event.set()
-    print(f"Reached {states}")
-
-def wipe_target_state():
-    global target_states_queue
-    touch_updated_at()
-    target_states_queue = []
-    frame_event.set()
+    target_states = wrap_list(states)
+    timer_event.set()
 
 def new_step_at(seconds):
     global step_at
@@ -337,6 +334,12 @@ def touch_updated_at():
     global updated_at
     updated_at = datetime.now()
 
+def wipe_reached_state():
+    global target_states
+    if in_target_state():
+        new_target_state(None)
+        print(f"Reached the target state!")
+
 def cycled_through_state():
     return (current_step % STEP_COUNT) + 1 == STEP_COUNT
 
@@ -344,25 +347,21 @@ def in_one_of(states):
     return current_state in states
 
 def in_target_state():
-    if target_states():
-        return in_one_of(target_states())
-    else:
-        return False
+    return in_one_of(target_states)
 
-def target_states():
-    if target_states_queue:
-        return target_states_queue[0]
+def should_rewind():
+    return target_states and current_state in REWINDABLE_STATES
 
 def switch_state():
     global current_state
 
-    if target_states():
-        path = bfs_path(current_state, target_states())
+    if target_states:
+        path = bfs_path(current_state, target_states)
         if len(path) >= 2:
             current_state = path[1]
             return
         else:
-            print(f"Couldn't find a path from {current_state} to {target_states()}")
+            print(f"Couldn't find a path from {current_state} to {target_states}")
 
     rules = read_rules(current_state)
 
