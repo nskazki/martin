@@ -43,19 +43,17 @@ STATE_LIE_DOWN_LEFT = "cat_lie_down_left"
 STATE_SLEEP_LEFT = "cat_sleep_left"
 STATE_LOOK_UP_LEFT = "cat_look_up_left"
 STATE_RUN_LEFT = "cat_run_left"
-# STATE_SIT_RIGHT = "cat_sit_right"
-# STATE_LIE_DOWN_RIGHT = "cat_lie_down_right"
-# STATE_SLEEP_RIGHT = "cat_sleep_right"
-# STATE_RUN_RIGHT = "cat_run_right"
+STATE_SIT_RIGHT = "cat_sit_right"
+STATE_RUN_RIGHT = "cat_run_right"
 STATE_JUMP = "cat_jump"
 
-RUN_STATES = [STATE_RUN_LEFT]
+RUN_STATES = [STATE_RUN_LEFT, STATE_RUN_RIGHT]
 SLEEP_STATES = [STATE_SLEEP_LEFT]
 LOOK_UP_STATES = [STATE_LOOK_UP_LEFT]
 
 STATES = {
     STATE_CLIMB: {
-        CAN: [STATE_LOOK_UP_LEFT, STATE_LIE_DOWN_LEFT],
+        CAN: STATE_LOOK_UP_LEFT,
         LOW: STATE_RUN_LEFT,
         DEFAULT: STATE_SIT_LEFT
     },
@@ -74,7 +72,14 @@ STATES = {
         LOW: STATE_SIT_LEFT
     },
     STATE_RUN_LEFT: {
-        DEFAULT: STATE_JUMP
+        DEFAULT: STATE_SIT_RIGHT
+    },
+    STATE_SIT_RIGHT: {
+        LOW: [STATE_RUN_RIGHT, STATE_JUMP]
+    },
+    STATE_RUN_RIGHT: {
+        CAN: STATE_LOOK_UP_LEFT,
+        DEFAULT: STATE_SIT_LEFT
     },
     STATE_JUMP: {
         DEFAULT: STATE_CLIMB
@@ -93,7 +98,7 @@ current_ip = None
 current_text = None
 current_step = 0
 current_state = STATE_CLIMB
-target_states = None
+target_states_queue = deque([])
 
 frame_event = threading.Event()
 timer_event = threading.Event()
@@ -119,8 +124,7 @@ def manage_timer():
             if is_past(step_at):
                 if cycled_through_state():
                     if in_target_state():
-                        new_target_state(None)
-                        print(f"Cleared the target state")
+                        shift_target_state()
                     switch_state()
                     print(f"Switched to {current_state}")
                 new_step(current_step + 1)
@@ -232,31 +236,31 @@ def parse_line(input):
         return [None, None]
 
 def plan_run():
-    new_target_state(RUN_STATES)
+    push_target_state(RUN_STATES)
 
 def plan_sleep():
-    new_target_state(SLEEP_STATES)
+    push_target_state(SLEEP_STATES)
 
 def plan_look_up():
-    new_target_state(LOOK_UP_STATES)
+    push_target_state(LOOK_UP_STATES)
 
 def plan_flush(value):
     new_text(value)
     new_clear_at(CLEAR_DELAY)
-    new_target_state(LOOK_UP_STATES)
+    push_target_state(LOOK_UP_STATES)
 
 def plan_draw(value):
     new_text(value)
     new_clear_at(ABORT_DELAY)
-    new_target_state(LOOK_UP_STATES)
+    push_target_state(LOOK_UP_STATES)
 
 def plan_clear():
     new_text(None)
     new_clear_at(None)
-    new_target_state(None)
+    wipe_target_state()
 
 def plan_stat_update(what, value):
-    new_target_state(LOOK_UP_STATES)
+    push_target_state(LOOK_UP_STATES)
     if what == "IP":
         new_ip(value)
     elif what == "BT":
@@ -285,12 +289,25 @@ def new_text(value):
     current_text = value
     frame_event.set()
 
-def new_target_state(states):
-    global target_states
+def push_target_state(states):
+    global target_states_queue
     touch_updated_at()
-    target_states = states
+    target_states_queue.append(states)
     frame_event.set()
     print(f"Targets {states}")
+
+def shift_target_state():
+    global target_states_queue
+    touch_updated_at()
+    states = target_states_queue.popleft()
+    frame_event.set()
+    print(f"Reached {states}")
+
+def wipe_target_state():
+    global target_states_queue
+    touch_updated_at()
+    target_states_queue = []
+    frame_event.set()
 
 def new_step_at(seconds):
     global step_at
@@ -319,46 +336,62 @@ def in_one_of(states):
     return current_state in states
 
 def in_target_state():
-    if target_states:
-        return in_one_of(target_states)
+    if target_states():
+        return in_one_of(target_states())
     else:
         return False
+
+def target_states():
+    if target_states_queue:
+        return target_states_queue[0]
 
 def switch_state():
     global current_state
 
-    if target_states:
-        path = bfs_path(STATES, current_state, target_states)
-        current_state = path[1]
-    else:
-        rules = STATES[current_state]
+    if target_states():
+        path = bfs_path(current_state, target_states())
+        if len(path) >= 2:
+            current_state = path[1]
+            return
+        else:
+            print(f"Couldn't find a path from {current_state} to {target_states()}")
 
-        for state in wrap_list(rules.get(LOW)):
-            if low_chance():
-                current_state = state
-                return
+    rules = read_rules(current_state)
 
-        for state in wrap_list(rules.get(FAIR)):
-            if fair_chance():
-                current_state = state
-                return
+    for state in wrap_list(rules.get(LOW)):
+        if low_chance():
+            current_state = state
+            return
 
-        default = rules.get(DEFAULT)
-        if default:
-            current_state = default
+    for state in wrap_list(rules.get(FAIR)):
+        if fair_chance():
+            current_state = state
+            return
 
-def bfs_path(graph, start, targets):
+    default = rules.get(DEFAULT)
+    if default:
+        current_state = default
+
+def bfs_path(start, targets):
     queue = deque([(start, [start])])
     visited = set()
     while queue:
-        (node, path) = queue.popleft()
-        if node in targets:
+        (state, path) = queue.popleft()
+        if state in targets and len(path) != 1:
             return path
-        if node not in visited:
-            visited.add(node)
-            for neighbor in flatten_list(graph[node].values()):
+        if state not in visited:
+            visited.add(state)
+            for neighbor in flatten_list(read_rules(state).values()):
                 if neighbor not in visited:
                     queue.append((neighbor, path + [neighbor]))
+    return []
+
+def read_rules(state):
+    result = STATES[state]
+    if isinstance(result, str):
+        return read_rules(result)
+    else:
+        return result
 
 def wrap_list(value):
     if isinstance(value, list):
