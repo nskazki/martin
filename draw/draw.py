@@ -1,9 +1,9 @@
-import re
 import atexit
 import traceback
 import threading
 from text_helpers import truncate
 from list_helpers import wrap_list
+from line_helpers import parse_line
 from time_helpers import seconds_from_now, is_past, is_older_than
 from state_helpers import next_state, CAN, LOW, FAIR, DEFAULT
 from display_helpers import draw_display, freeze_display, halt_display, with_text
@@ -168,13 +168,6 @@ def process_line(line):
     else:
         plan_draw(line)
 
-def parse_line(input):
-    match = re.match(r"(\w+):\s*(.*)", input)
-    if match:
-        return [match.group(1), match.group(2)]
-    else:
-        return [None, None]
-
 def plan_run_left():
     new_target_state(STATE_RUN_LEFT)
 
@@ -289,7 +282,7 @@ atexit.register(halt_display)
 frame_thread = spawn(manage_frame)
 timer_thread = spawn(manage_timer)
 stdin_thread = spawn_stdin(process_line)
-socket_thread = spawn_socket(process_line)
+socket_thread = spawn_socket("/tmp/cat_socket", process_line)
 
 frame_thread.join()
 timer_thread.join()

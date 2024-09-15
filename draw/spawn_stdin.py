@@ -1,7 +1,7 @@
 import sys
 import traceback
 from spawn import spawn
-from process_lines import process_lines
+from line_helpers import process_lines
 
 def listen_to_stdin(process_line):
     while True:

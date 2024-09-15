@@ -2,7 +2,7 @@ import os
 import socket
 import traceback
 from spawn import spawn
-from process_lines import process_lines
+from line_helpers import process_lines
 
 def create_socket(socket_path):
     if os.path.exists(socket_path):
@@ -29,13 +29,12 @@ def listen_to_connection(connection, process_line):
             connection.close()
             break
 
-def listen_to_socket(process_line):
-    socket_path = "/tmp/cat_socket"
+def listen_to_socket(socket_path, process_line):
     socket = create_socket(socket_path)
     while True:
         connection, _ = socket.accept()
         print(f"Handling a connection")
         spawn(listen_to_connection, connection, process_line)
 
-def spawn_socket(process_line):
-  return spawn(listen_to_socket, process_line)
+def spawn_socket(socket_path, process_line):
+  return spawn(listen_to_socket, socket_path, process_line)
