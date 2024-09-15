@@ -1,3 +1,4 @@
+import atexit
 import traceback
 import threading
 import buttonshim
@@ -24,13 +25,13 @@ COLOR_GREEN = [0x00, 0x3f, 0x00]
 
 toggle_at = None
 pixel_event = threading.Event()
+error_event = threading.Event()
 current_state = False
 current_color = None
 current_interval = None
 current_countdown = None
 
 ui = UInput({e.EV_KEY: KEYCODES}, name="Button-SHIM", bustype=e.BUS_USB)
-buttonshim.set_pixel(*COLOR_OFF)
 
 @buttonshim.on_press(BUTTONS)
 def button_p_handler(button, pressed):
@@ -76,40 +77,48 @@ def run_left():
     print("Sending Run Left! to the cat")
     send_to_socket(SOCKET_CAT, "Run Left!")
 
-def manage_pixel():
+def manage_pixel(error_event):
+    try:
+        while True:
+            iterate_pixel()
+    except Exception as e:
+        print(f"An unexpected error occurred in the pixel manager: {e}")
+        traceback.print_exc()
+        error_event.set()
+
+def iterate_pixel():
     global toggle_at, current_state, current_countdown
 
-    while True:
-        try:
-            pixel_event.clear()
+    pixel_event.clear()
 
-            if not current_color:
-                buttonshim.set_pixel(*COLOR_OFF)
-            elif not toggle_at or is_past(toggle_at):
-                current_state = not current_state
+    if not current_color:
+        turn_pixel_off()
+    elif not toggle_at or is_past(toggle_at):
+        current_state = not current_state
 
-                if current_state:
-                    buttonshim.set_pixel(*current_color)
-                else:
-                    buttonshim.set_pixel(*COLOR_OFF)
+        if current_state:
+            buttonshim.set_pixel(*current_color)
+        else:
+            turn_pixel_off()
 
-                if current_countdown and not current_state:
-                    current_countdown -= 1
+        if current_countdown and not current_state:
+            current_countdown -= 1
 
-                if current_countdown == None or current_countdown >= 1:
-                    toggle_at = seconds_from_now(current_interval)
-                else:
-                    toggle_at = None
+        if current_countdown == None or current_countdown >= 1:
+            toggle_at = seconds_from_now(current_interval)
+        else:
+            toggle_at = None
 
-            if toggle_at:
-                sleep(TIMER_INTERVAL)
-            else:
-                pixel_event.wait()
-        except Exception as e:
-            print(f"An unexpected error occurred in the pixel manager: {e}")
-            traceback.print_exc()
+    if toggle_at:
+        sleep(TIMER_INTERVAL)
+    else:
+        pixel_event.wait()
+
+def turn_pixel_off():
+    buttonshim.set_pixel(*COLOR_OFF)
 
 def process_line(line):
+    print(f"Processing {line}")
     what, value = parse_line(line)
     if line.startswith("Blink:"):
         plan_short_blink(value)
@@ -153,10 +162,12 @@ def encode_color(name):
     elif name == "green":
         return COLOR_GREEN
 
-pixel_thread = spawn(manage_pixel)
-stdin_thread = spawn_stdin(process_line)
-socket_thread = spawn_socket(SOCKET_BUTTONS, process_line)
+turn_pixel_off()
+atexit.register(turn_pixel_off)
 
-pixel_thread.join()
-stdin_thread.join()
-socket_thread.join()
+pixel_thread = spawn(manage_pixel, error_event)
+stdin_thread = spawn_stdin(process_line, error_event)
+socket_thread = spawn_socket(SOCKET_BUTTONS, process_line, error_event)
+
+error_event.wait()
+print("An error occured. Exiting!")

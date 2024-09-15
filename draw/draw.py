@@ -85,66 +85,76 @@ target_states = []
 
 frame_event = threading.Event()
 timer_event = threading.Event()
+error_event = threading.Event()
 
-def manage_timer():
-    while True:
-        try:
-            timer_event.clear()
+def manage_timer(error_event):
+    try:
+        while True:
+            iterate_timer()
+    except Exception as e:
+        print(f"An unexpected error occurred in the timer manager: {e}")
+        traceback.print_exc()
+        error_event.set()
 
-            if is_past(clear_at):
-                print("Clearing by timer")
-                new_text(None)
-                new_clear_at(None)
+def iterate_timer():
+    timer_event.clear()
 
-            if is_past(step_at):
-                if should_rewind():
-                    target_step = current_step + (STEP_COUNT - current_step % STEP_COUNT)
-                else:
-                    target_step = current_step + 1
+    if is_past(clear_at):
+        print("Clearing by timer")
+        new_text(None)
+        new_clear_at(None)
 
-                if cycled_through_state() or should_rewind():
-                    wipe_reached_state()
-                    switch_state()
-                    print(f"Switched to {current_state}")
+    if is_past(step_at):
+        if should_rewind():
+            target_step = current_step + (STEP_COUNT - current_step % STEP_COUNT)
+        else:
+            target_step = current_step + 1
 
-                new_step(target_step)
-                new_step_at(None)
-                print(f"Incremented {current_step}")
+        if cycled_through_state() or should_rewind():
+            wipe_reached_state()
+            switch_state()
+            print(f"Switched to {current_state}")
 
-            if clear_at or step_at:
-                sleep(TIMER_INTERVAL)
-            else:
-                timer_event.wait()
-        except Exception as e:
-            print(f"An unexpected error occurred in the timer manager: {e}")
-            traceback.print_exc()
+        new_step(target_step)
+        new_step_at(None)
+        print(f"Incremented {current_step}")
 
-def manage_frame():
-    while True:
-        try:
-            frame_event.clear()
+    if clear_at or step_at:
+        sleep(TIMER_INTERVAL)
+    else:
+        timer_event.wait()
 
-            text = current_text or current_bt or current_ip or "You are beautiful"
-            text = truncate(text, TRUNCAT_AT)
+def manage_frame(error_event):
+    try:
+        while True:
+            iterate_frame()
+    except Exception as e:
+        print(f"An unexpected error occurred in the frame manager: {e}")
+        traceback.print_exc()
+        error_event.set()
 
-            can_idle = cycled_through_state() and in_one_of(SLEEP_STATES)
-            should_idle = not current_text and is_older_than(updated_at, IDLE_DELAY)
+def iterate_frame():
+    frame_event.clear()
 
-            if can_idle and should_idle:
-                print("Have been idle for a while")
-                draw_display(with_text("rina.bmp", text))
-                freeze_display()
-            else:
-                new_step_at(FRAME_INTERVAL)
-                frame = (current_step % STEP_COUNT) + 1
-                draw_display(with_text(f"{current_state}/{frame}.bmp", text))
+    text = current_text or current_bt or current_ip or "You are beautiful"
+    text = truncate(text, TRUNCAT_AT)
 
-            frame_event.wait()
-        except Exception as e:
-            print(f"An unexpected error occurred in the frame manager: {e}")
-            traceback.print_exc()
+    can_idle = cycled_through_state() and in_one_of(SLEEP_STATES)
+    should_idle = not current_text and is_older_than(updated_at, IDLE_DELAY)
+
+    if can_idle and should_idle:
+        print("Have been idle for a while")
+        draw_display(with_text("rina.bmp", text))
+        freeze_display()
+    else:
+        new_step_at(FRAME_INTERVAL)
+        frame = (current_step % STEP_COUNT) + 1
+        draw_display(with_text(f"{current_state}/{frame}.bmp", text))
+
+    frame_event.wait()
 
 def process_line(line):
+    print(f"Processing {line}")
     what, value = parse_line(line)
     if line.startswith("Run Left!"):
         plan_run_left()
@@ -280,12 +290,10 @@ def switch_state():
 
 atexit.register(halt_display)
 
-frame_thread = spawn(manage_frame)
-timer_thread = spawn(manage_timer)
-stdin_thread = spawn_stdin(process_line)
-socket_thread = spawn_socket(SOCKET_CAT, process_line)
+frame_thread = spawn(manage_frame, error_event)
+timer_thread = spawn(manage_timer, error_event)
+stdin_thread = spawn_stdin(process_line, error_event)
+socket_thread = spawn_socket(SOCKET_CAT, process_line, error_event)
 
-frame_thread.join()
-timer_thread.join()
-stdin_thread.join()
-socket_thread.join()
+error_event.wait()
+print("An error occured. Exiting!")

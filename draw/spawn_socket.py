@@ -13,28 +13,31 @@ def create_socket(socket_path):
     server_sock.listen(1)
     return server_sock
 
-def listen_to_connection(connection, process_line):
-    while True:
-        data = connection.recv(1024)
-        if data:
-            try:
+def listen_to_connection(connection, process_line, error_event):
+    try:
+        while True:
+            data = connection.recv(1024)
+            if data:
                 input = data.decode("utf-8")
-                print(f"Processing {input}")
                 process_lines(input, process_line)
-            except Exception as e:
-                print(f"An unexpected error occurred in the socket listener: {e}")
-                traceback.print_exc()
-        else:
-            print(f"Closing the connection")
-            connection.close()
-            break
+            else:
+                connection.close()
+                break
+    except Exception as e:
+        print(f"An unexpected error occurred in the connection listener: {e}")
+        traceback.print_exc()
+        error_event.set()
 
-def listen_to_socket(socket_path, process_line):
-    socket = create_socket(socket_path)
-    while True:
-        connection, _ = socket.accept()
-        print(f"Handling a connection")
-        spawn(listen_to_connection, connection, process_line)
+def listen_to_socket(socket_path, process_line, error_event):
+    try:
+        socket = create_socket(socket_path)
+        while True:
+            connection, _ = socket.accept()
+            spawn(listen_to_connection, connection, process_line, error_event)
+    except Exception as e:
+        print(f"An unexpected error occurred in the socket thread: {e}")
+        traceback.print_exc()
+        error_event.set()
 
-def spawn_socket(socket_path, process_line):
-  return spawn(listen_to_socket, socket_path, process_line)
+def spawn_socket(socket_path, process_line, error_event):
+    return spawn(listen_to_socket, socket_path, process_line, error_event)

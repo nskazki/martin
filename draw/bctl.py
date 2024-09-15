@@ -14,7 +14,7 @@ from stdout_logger import StdoutLogger
 
 BCTL_TIMEOUT = 5
 USER_TIMEOUT = 60
-WARNING_TIMEOUT = 20
+WARN_TIMEOUT = 50
 TIMER_INTERVAL = 1
 
 bctl = None
@@ -22,46 +22,45 @@ pkey = None
 warn_at = None
 reject_at = None
 timer_event = threading.Event()
+error_event = threading.Event()
 
-def manage_reject():
-    global warn_at, reject_at
+def manage_timer(error_event):
+    try:
+        while True:
+            iterate_timer()
+    except Exception as e:
+        print(f"An unexpected error occurred in the rejection manager: {e}")
+        traceback.print_exc()
+        error_event.set()
 
-    while True:
-        try:
-            timer_event.clear()
+def iterate_timer():
+    timer_event.clear()
 
-            if is_past(warn_at):
-                warn_at = None
-                send_to_socket(SOCKET_CAT, "Draw: Looking some more")
+    if is_past(warn_at):
+        new_warn_at(None)
+        send_to_socket(SOCKET_CAT, "Draw: Looking some more")
 
-            if is_past(reject_at):
-                reject_at = None
-                close_bctl()
+    if is_past(reject_at):
+        new_reject_at(None)
+        close_bctl()
 
-            if warn_at or reject_at:
-                sleep(TIMER_INTERVAL)
-            else:
-                timer_event.wait()
-        except Exception as e:
-            print(f"An unexpected error occurred in the rejection manager: {e}")
-            traceback.print_exc()
+    if warn_at or reject_at:
+        sleep(TIMER_INTERVAL)
+    else:
+        timer_event.wait()
 
 def handle_yes():
-    global warn_at, reject_at
-
-    if not pkey and not bctl:
-        warn_at = seconds_from_now(WARNING_TIMEOUT)
-        reject_at = None
-        timer_event.set()
+    if not bctl and not pkey:
+        new_warn_at(WARN_TIMEOUT)
+        new_reject_at(None)
 
         send_to_socket(SOCKET_CAT, "Draw: Looking around")
         send_to_socket(SOCKET_BUTTONS, "Blink Slow: blue")
         wait_passkey()
 
         if pkey:
-            warn_at = None
-            reject_at = seconds_from_now(USER_TIMEOUT)
-            timer_event.set()
+            new_warn_at(None)
+            new_reject_at(USER_TIMEOUT)
 
             send_to_socket(SOCKET_CAT, f"Confirm? {pkey}")
             send_to_socket(SOCKET_BUTTONS, "Blink Fast: blue")
@@ -70,7 +69,8 @@ def handle_yes():
             send_to_socket(SOCKET_CAT, "Lie Down!")
             send_to_socket(SOCKET_BUTTONS, "Blink: red")
     elif pkey:
-        reject_at = None
+        new_warn_at(None)
+        new_reject_at(None)
 
         if pair_passkey():
             send_to_socket(SOCKET_CAT, f"Flush: Found a friend!")
@@ -80,6 +80,22 @@ def handle_yes():
             send_to_socket(SOCKET_CAT, f"Flush: Can't be friends")
             send_to_socket(SOCKET_CAT, "Lie Down!")
             send_to_socket(SOCKET_BUTTONS, "Blink: red")
+
+def new_warn_at(in_seconds):
+    global warn_at
+    if in_seconds:
+        warn_at = seconds_from_now(in_seconds)
+    else:
+        warn_at = None
+    timer_event.set()
+
+def new_reject_at(in_seconds):
+    global reject_at
+    if in_seconds:
+        reject_at = seconds_from_now(in_seconds)
+    else:
+        reject_at = None
+    timer_event.set()
 
 def close_bctl():
     global bctl
@@ -91,8 +107,8 @@ def close_bctl():
         bctl.sendline("no")
         bctl.sendline("discoverable off")
         bctl.expect("Changing discoverable off succeeded")
-    except Exception:
-        print("Couldn't hide in time!")
+    except Exception as e:
+        print(f"Couldn't turn off discoverability due to {e}")
     finally:
         bctl.close()
         bctl = None
@@ -108,8 +124,8 @@ def spawn_bctl():
         bctl.logfile = StdoutLogger()
         bctl.timeout = BCTL_TIMEOUT
         bctl.expect("#")
-    except Exception:
-        print("Couldn't spawn in time!")
+    except Exception as e:
+        print(f"Couldn't spawn bluetoothctl due to {e}")
         close_bctl()
 
 def wait_passkey():
@@ -130,8 +146,8 @@ def wait_passkey():
         bctl.sendline("default-agent")
         bctl.expect(r"Confirm passkey (\d+)", timeout=USER_TIMEOUT)
         pkey = bctl.match.group(1).decode("utf-8")
-    except Exception:
-        print("Didn't receive a pkey in time!")
+    except Exception as e:
+        print(f"Couldn't receive a passkey due to {e}")
         close_bctl()
 
 def pair_passkey():
@@ -152,24 +168,26 @@ def pair_passkey():
             bctl.expect("Player")
 
         return True
-    except Exception:
-        print("Couldn't pair in time!")
+    except Exception as e:
+        print(f"Couldn't pair due to {e}")
         return False
     finally:
         close_bctl()
 
 def process_line(line):
+    print(f"Processing {line}")
     if line.startswith("Yes!"):
         handle_yes()
+    elif line.startswith("No!"):
+        close_bctl()
     else:
         print(f"Unknown {line}")
 
 atexit.register(close_bctl)
 
-timer_thread = spawn(manage_reject)
-stdin_thread = spawn_stdin(process_line)
-socket_thread = spawn_socket(SOCKET_BCTL, process_line)
+timer_thread = spawn(manage_timer, error_event)
+stdin_thread = spawn_stdin(process_line, error_event)
+socket_thread = spawn_socket(SOCKET_BCTL, process_line, error_event)
 
-stdin_thread.join()
-socket_thread.join()
-timer_thread.join()
+error_event.wait()
+print("An error occured. Exiting!")
