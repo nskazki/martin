@@ -110,8 +110,10 @@ def iterate_timer():
         else:
             target_step = current_step + 1
 
-        if cycled_through_state() or should_rewind():
+        if cycled_through_state():
             wipe_reached_state()
+
+        if cycled_through_state() or should_rewind():
             switch_state()
             print(f"Switched to {current_state}")
 
@@ -282,7 +284,7 @@ def in_target_state():
     return in_one_of(target_states)
 
 def should_rewind():
-    return target_states and current_state in REWINDABLE_STATES
+    return target_states and current_state not in target_states and current_state in REWINDABLE_STATES
 
 def switch_state():
     global current_state
