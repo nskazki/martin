@@ -6,6 +6,7 @@ from list_helpers import wrap_list
 from line_helpers import parse_line
 from time_helpers import seconds_from_now, is_past, is_older_than
 from state_helpers import next_state, CAN, LOW, FAIR, DEFAULT
+from socket_helpers import SOCKET_CAT
 from display_helpers import draw_display, freeze_display, halt_display, with_text
 from spawn import spawn
 from spawn_stdin import spawn_stdin
@@ -16,9 +17,9 @@ from datetime import datetime
 FRAME_INTERVAL = 0.5
 TIMER_INTERVAL = 0.25
 
-IDLE_DELAY = 120
-CLEAR_DELAY = 30
-ABORT_DELAY = 30
+IDLE_DELAY = 180
+FLUSH_DELAY = 10
+ABORT_DELAY = 120
 
 STEP_COUNT = 4
 TRUNCAT_AT = 18
@@ -185,7 +186,7 @@ def plan_lie_down():
 
 def plan_flush(value):
     new_text(value)
-    new_clear_at(CLEAR_DELAY)
+    new_clear_at(FLUSH_DELAY)
     new_target_state(LOOK_UP_STATES)
 
 def plan_draw(value):
@@ -282,7 +283,7 @@ atexit.register(halt_display)
 frame_thread = spawn(manage_frame)
 timer_thread = spawn(manage_timer)
 stdin_thread = spawn_stdin(process_line)
-socket_thread = spawn_socket("/tmp/cat_socket", process_line)
+socket_thread = spawn_socket(SOCKET_CAT, process_line)
 
 frame_thread.join()
 timer_thread.join()
