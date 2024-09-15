@@ -9,13 +9,13 @@ from spawn_socket import spawn_socket
 from line_helpers import parse_line
 from time_helpers import is_past, seconds_from_now
 from socket_helpers import send_to_socket, SOCKET_CAT, SOCKET_BCTL, SOCKET_BUTTONS
-from evdev import uinput, UInput, ecodes as e
+from evdev import UInput, ecodes
 
 TIMER_INTERVAL = 0.1
 FAST_BLINK_INTERVAL = 0.5
 SLOW_BLINK_INTERVAL = 1
 
-KEYCODES = [e.KEY_A, e.KEY_B, e.KEY_C, e.KEY_D, e.KEY_E]
+KEYCODES = [ecodes.KEY_A, ecodes.KEY_B, ecodes.KEY_C, ecodes.KEY_D, ecodes.KEY_E]
 BUTTONS = [buttonshim.BUTTON_A, buttonshim.BUTTON_B, buttonshim.BUTTON_C, buttonshim.BUTTON_D, buttonshim.BUTTON_E]
 
 COLOR_OFF = [0x00, 0x00, 0x00]
@@ -34,30 +34,30 @@ blink_countdown = None
 pixel_event = threading.Event()
 error_event = threading.Event()
 
-ui = UInput({e.EV_KEY: KEYCODES}, name="Button-SHIM", bustype=e.BUS_USB)
+ui = UInput({ecodes.EV_KEY: KEYCODES}, name="Button-SHIM", bustype=ecodes.BUS_USB)
 
 @buttonshim.on_press(BUTTONS)
 def button_p_handler(button, pressed):
     keycode = KEYCODES[button]
 
-    if keycode == e.KEY_E:
+    if keycode == ecodes.KEY_E:
         yes_bctl()
-    elif keycode == e.KEY_D:
+    elif keycode == ecodes.KEY_D:
         run_right()
-    elif keycode == e.KEY_C:
+    elif keycode == ecodes.KEY_C:
         look_up()
-    elif keycode == e.KEY_B:
+    elif keycode == ecodes.KEY_B:
         lie_down()
-    elif keycode == e.KEY_A:
+    elif keycode == ecodes.KEY_A:
         run_left()
 
-    ui.write(e.EV_KEY, keycode, 1)
+    ui.write(ecodes.EV_KEY, keycode, 1)
     ui.syn()
 
 @buttonshim.on_release(BUTTONS)
 def button_r_handler(button, pressed):
     keycode = KEYCODES[button]
-    ui.write(e.EV_KEY, keycode, 0)
+    ui.write(ecodes.EV_KEY, keycode, 0)
     ui.syn()
 
 def yes_bctl():

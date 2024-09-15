@@ -1,4 +1,3 @@
-import sys
 import atexit
 import pexpect
 import threading
@@ -81,7 +80,7 @@ def handle_yes():
         new_reject_at(None)
 
         if pair_passkey():
-            send_to_socket(SOCKET_CAT, f"Flush: Found a friend!")
+            send_to_socket(SOCKET_CAT, "Flush: Found a friend!")
             send_to_socket(SOCKET_CAT, "Run Left!")
             send_to_socket(SOCKET_BUTTONS, "Blink Short: Green")
         else:

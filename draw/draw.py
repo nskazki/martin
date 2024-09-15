@@ -1,18 +1,18 @@
 import atexit
 import traceback
 import threading
+from time import sleep
+from datetime import datetime
 from text_helpers import truncate
 from list_helpers import wrap_list
 from line_helpers import parse_line
 from time_helpers import seconds_from_now, is_past, is_older_than
-from state_helpers import next_state, CAN, LOW, FAIR, DEFAULT
+from state_helpers import next_state, CAN, LOW, DEFAULT
 from socket_helpers import SOCKET_CAT
 from display_helpers import draw_display, freeze_display, halt_display, with_text
 from spawn import spawn
 from spawn_stdin import spawn_stdin
 from spawn_socket import spawn_socket
-from time import sleep
-from datetime import datetime
 
 FRAME_INTERVAL = 0.5
 TIMER_INTERVAL = 0.25
@@ -269,10 +269,9 @@ def touch_updated_at():
     updated_at = datetime.now()
 
 def wipe_reached_state():
-    global target_states
     if in_target_state():
         new_target_state(None)
-        print(f"Reached the target state!")
+        print("Reached the target state!")
 
 def cycled_through_state():
     return (current_step % STEP_COUNT) + 1 == STEP_COUNT

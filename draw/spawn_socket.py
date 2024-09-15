@@ -18,8 +18,8 @@ def listen_to_connection(connection, process_line, error_event):
         while True:
             data = connection.recv(1024)
             if data:
-                input = data.decode("utf-8")
-                process_lines(input, process_line)
+                lines = data.decode("utf-8")
+                process_lines(lines, process_line)
             else:
                 connection.close()
                 break
@@ -30,12 +30,12 @@ def listen_to_connection(connection, process_line, error_event):
 
 def listen_to_socket(socket_path, process_line, error_event):
     try:
-        socket = create_socket(socket_path)
+        server = create_socket(socket_path)
         while True:
-            connection, _ = socket.accept()
+            connection, _ = server.accept()
             spawn(listen_to_connection, connection, process_line, error_event)
     except Exception as e:
-        print(f"An unexpected error occurred in the socket thread: {e}")
+        print(f"An unexpected error occurred in the server thread: {e}")
         traceback.print_exc()
         error_event.set()
 

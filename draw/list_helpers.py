@@ -1,7 +1,7 @@
 def wrap_list(value):
     if isinstance(value, list):
         return value
-    elif value == None:
+    elif value is None:
         return []
     else:
         return [value]
