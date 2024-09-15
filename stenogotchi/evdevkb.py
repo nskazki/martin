@@ -223,7 +223,7 @@ class EvdevKbrd:
             self.bus = dbus.SystemBus()
             self.btkobject = self.bus.get_object(HID_DBUS, HID_SRVC)
             self.btk_service = dbus.Interface(self.btkobject, HID_DBUS)
-        
+
     def convert(self, evdev_keycode):
         return self.keytable[evdev_keycode]
 
@@ -232,7 +232,7 @@ class EvdevKbrd:
             return self.modkeys[evdev_keycode]
         else:
             return -1  # Return an invalid array element
-    
+
     def set_do_capture(self, toggle):
         self.do_capture = toggle
 
@@ -245,7 +245,7 @@ class EvdevKbrd:
         # Release input device for other applications
         for dev in self.devs:
             dev.ungrab()
-    
+
     def get_input_devices(self):
         # Returns all input devices connected to device
         input_devices = [evdev.InputDevice(path) for path in evdev.list_devices()]
@@ -262,7 +262,7 @@ class EvdevKbrd:
                 keyboards.append(device)
                 logging.debug(f"[evdevkb] Found keyboard '{device.name}' at path '{device.path}'")
         return keyboards
-    
+
     def set_keyboards(self):
         # Sets all keyboards as device to listen for key-inputs from
         while not self.have_kb:
@@ -320,12 +320,12 @@ class EvdevKbrd:
 
     def event_loop(self):
         """
-        Reads keypresses from all identified keyboards and sends them to emulated 
+        Reads keypresses from all identified keyboards and sends them to emulated
         bluetooth HID as long as do_capture is True.
         """
         self.do_capture = True
         self.grab()
-        
+
         while self.do_capture:
             r, w, x = select(self.devs, [], [], 0.01)  # 0.1 is default
             for fd in r:
@@ -354,7 +354,7 @@ class EvdevKeyboard(ObjectClass):
         self._agent = None
         self.evdevkb = None
         self.do_capture = False
-     
+
     def on_ready(self, agent):
         self._agent = agent
 
@@ -380,7 +380,7 @@ class EvdevKeyboard(ObjectClass):
         self.do_capture = False
         self.evdevkb = None
         self.trigger_ui_update('STENO')
-    
+
     def get_capture_state(self):
         return self.do_capture
 
