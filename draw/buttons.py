@@ -20,16 +20,19 @@ BUTTONS = [buttonshim.BUTTON_A, buttonshim.BUTTON_B, buttonshim.BUTTON_C, button
 
 COLOR_OFF = [0x00, 0x00, 0x00]
 COLOR_RED = [0x3f, 0x00, 0x00]
-COLOR_BLUE = [0x00, 0x00, 0x3f]
+COLOR_BLUE = [0x00, 0x00, 0x4f]
 COLOR_GREEN = [0x00, 0x3f, 0x00]
 
-toggle_at = None
+static_color = None
+
+blink_at = None
+blink_state = False
+blink_color = None
+blink_interval = None
+blink_countdown = None
+
 pixel_event = threading.Event()
 error_event = threading.Event()
-current_state = False
-current_color = None
-current_interval = None
-current_countdown = None
 
 ui = UInput({e.EV_KEY: KEYCODES}, name="Button-SHIM", bustype=e.BUS_USB)
 
@@ -87,29 +90,33 @@ def manage_pixel(error_event):
         error_event.set()
 
 def iterate_pixel():
-    global toggle_at, current_state, current_countdown
+    global blink_at, blink_state, blink_color, blink_countdown
 
     pixel_event.clear()
 
-    if not current_color:
+    if not blink_color and not static_color:
         turn_pixel_off()
-    elif not toggle_at or is_past(toggle_at):
-        current_state = not current_state
+    if not blink_at or is_past(blink_at):
+        if blink_countdown and not blink_state:
+            blink_countdown -= 1
+            print(f"Decremented {blink_countdown}")
 
-        if current_state:
-            buttonshim.set_pixel(*current_color)
-        else:
-            turn_pixel_off()
+        if not blink_countdown:
+            blink_at = None
+            blink_color = None
 
-        if current_countdown and not current_state:
-            current_countdown -= 1
+        if blink_color:
+            blink_at = seconds_from_now(blink_interval)
+            blink_state = not blink_state
 
-        if current_countdown == None or current_countdown >= 1:
-            toggle_at = seconds_from_now(current_interval)
-        else:
-            toggle_at = None
+            if blink_state:
+                buttonshim.set_pixel(*blink_color)
+            else:
+                turn_pixel_off()
+        elif static_color:
+            buttonshim.set_pixel(*static_color)
 
-    if toggle_at:
+    if blink_at:
         sleep(TIMER_INTERVAL)
     else:
         pixel_event.wait()
@@ -120,46 +127,58 @@ def turn_pixel_off():
 def process_line(line):
     print(f"Processing {line}")
     what, value = parse_line(line)
-    if line.startswith("Blink:"):
+    if what == "Light On":
+        plan_light_on(value)
+    elif what == "Light Off":
+        plan_light_off()
+    elif what == "Blink Short":
         plan_short_blink(value)
-    elif line.startswith("Blink Slow:"):
+    elif what == "Blink Slow":
         plan_start_blinking(value, SLOW_BLINK_INTERVAL)
-    elif line.startswith("Blink Fast:"):
+    elif what == "Blink Fast":
         plan_start_blinking(value, FAST_BLINK_INTERVAL)
-    elif line.startswith("Stop Blinking!"):
+    elif what == "Stop Blinking":
         plan_stop_blinking()
     else:
         print(f"Unknown {line}")
 
+def plan_light_on(value):
+    global static_color
+    static_color = encode_color(value)
+    pixel_event.set()
+
+def plan_light_off():
+    global static_color
+    static_color = None
+    pixel_event.set()
+
 def plan_short_blink(value):
-    plan_start_blinking(value, FAST_BLINK_INTERVAL, 3)
+    plan_start_blinking(value, FAST_BLINK_INTERVAL, 4)
 
 def plan_start_blinking(value, interval, countdown=60):
-    global toggle_at, current_state, current_color, current_interval, current_countdown
-    toggle_at = None
-    current_state = False
-    current_color = encode_color(value)
-    current_interval = interval
-    current_countdown = countdown
+    global blink_at, blink_state, blink_color, blink_interval, blink_countdown
+    blink_at = None
+    blink_state = False
+    blink_color = encode_color(value)
+    blink_interval = interval
+    blink_countdown = countdown
     pixel_event.set()
-    print(f"Start Blinking {value} each {interval} seconds")
 
 def plan_stop_blinking():
-    global toggle_at, current_state, current_color, current_interval, current_countdown
-    toggle_at = None
-    current_state = False
-    current_color = None
-    current_interval = None
-    current_countdown = None
+    global blink_at, blink_state, blink_color, blink_interval, blink_countdown
+    blink_at = None
+    blink_state = False
+    blink_color = None
+    blink_interval = None
+    blink_countdown = None
     pixel_event.set()
-    print("Stop Blinking")
 
 def encode_color(name):
-    if name == "red":
+    if name == "Red":
         return COLOR_RED
-    elif name == "blue":
+    elif name == "Blue":
         return COLOR_BLUE
-    elif name == "green":
+    elif name == "Green":
         return COLOR_GREEN
 
 turn_pixel_off()

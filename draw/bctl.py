@@ -13,8 +13,8 @@ from socket_helpers import send_to_socket, SOCKET_CAT, SOCKET_BCTL, SOCKET_BUTTO
 from stdout_logger import StdoutLogger
 
 BCTL_TIMEOUT = 5
-USER_TIMEOUT = 60
-WARN_TIMEOUT = 50
+USER_TIMEOUT = 30
+WARN_TIMEOUT = 20
 TIMER_INTERVAL = 1
 
 bctl = None
@@ -38,11 +38,19 @@ def iterate_timer():
 
     if is_past(warn_at):
         new_warn_at(None)
-        send_to_socket(SOCKET_CAT, "Draw: Looking some more")
+        if pkey:
+            send_to_socket(SOCKET_CAT, "Draw: Unsure about them")
+            send_to_socket(SOCKET_BUTTONS, "Blink Fast: Blue")
+        else:
+            send_to_socket(SOCKET_CAT, "Draw: Looking some more")
+            send_to_socket(SOCKET_BUTTONS, "Blink Fast: Blue")
 
     if is_past(reject_at):
         new_reject_at(None)
         close_bctl()
+        send_to_socket(SOCKET_CAT, "Flush: Don't like them")
+        send_to_socket(SOCKET_CAT, "Lie Down!")
+        send_to_socket(SOCKET_BUTTONS, "Blink Short: Red")
 
     if warn_at or reject_at:
         sleep(TIMER_INTERVAL)
@@ -55,19 +63,19 @@ def handle_yes():
         new_reject_at(None)
 
         send_to_socket(SOCKET_CAT, "Draw: Looking around")
-        send_to_socket(SOCKET_BUTTONS, "Blink Slow: blue")
+        send_to_socket(SOCKET_BUTTONS, "Blink Slow: Blue")
         wait_passkey()
 
         if pkey:
-            new_warn_at(None)
+            new_warn_at(WARN_TIMEOUT)
             new_reject_at(USER_TIMEOUT)
 
             send_to_socket(SOCKET_CAT, f"Confirm? {pkey}")
-            send_to_socket(SOCKET_BUTTONS, "Blink Fast: blue")
+            send_to_socket(SOCKET_BUTTONS, "Blink Slow: Blue")
         else:
             send_to_socket(SOCKET_CAT, "Flush: Nobody's around")
             send_to_socket(SOCKET_CAT, "Lie Down!")
-            send_to_socket(SOCKET_BUTTONS, "Blink: red")
+            send_to_socket(SOCKET_BUTTONS, "Blink Short: Red")
     elif pkey:
         new_warn_at(None)
         new_reject_at(None)
@@ -75,11 +83,11 @@ def handle_yes():
         if pair_passkey():
             send_to_socket(SOCKET_CAT, f"Flush: Found a friend!")
             send_to_socket(SOCKET_CAT, "Run Left!")
-            send_to_socket(SOCKET_BUTTONS, "Blink: green")
+            send_to_socket(SOCKET_BUTTONS, "Blink Short: Green")
         else:
-            send_to_socket(SOCKET_CAT, f"Flush: Can't be friends")
+            send_to_socket(SOCKET_CAT, "Flush: Can't be friends")
             send_to_socket(SOCKET_CAT, "Lie Down!")
-            send_to_socket(SOCKET_BUTTONS, "Blink: red")
+            send_to_socket(SOCKET_BUTTONS, "Blink Short: Red")
 
 def new_warn_at(in_seconds):
     global warn_at
@@ -176,9 +184,9 @@ def pair_passkey():
 
 def process_line(line):
     print(f"Processing {line}")
-    if line.startswith("Yes!"):
+    if line == "Yes!":
         handle_yes()
-    elif line.startswith("No!"):
+    elif line == "No!":
         close_bctl()
     else:
         print(f"Unknown {line}")

@@ -158,25 +158,25 @@ def iterate_frame():
 def process_line(line):
     print(f"Processing {line}")
     what, value = parse_line(line)
-    if line.startswith("Run Left!"):
+    if what == "Run Left":
         plan_run_left()
-    elif line.startswith("Run Right!"):
+    elif what == "Run Right":
         plan_run_right()
-    elif line.startswith("Look Up!"):
+    elif what == "Look Up":
         plan_look_up()
-    elif line.startswith("Lie Down!"):
+    elif what == "Lie Down":
         plan_lie_down()
-    elif line.startswith("Sleep!"):
+    elif what == "Sleep":
         plan_sleep()
-    elif line.startswith("Flush:"):
+    elif what == "Flush":
         plan_flush(value)
-    elif line.startswith("Draw:"):
+    elif what == "Draw":
         plan_draw(value)
-    elif line.startswith("Clear!"):
+    elif what == "Clear":
         plan_clear()
-    elif line.startswith("IP:"):
+    elif what == "IP":
         plan_stat_update(what, value)
-    elif line.startswith("BT:"):
+    elif what == "BT":
         plan_stat_update(what, value)
     else:
         plan_draw(line)
