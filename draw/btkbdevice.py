@@ -1,141 +1,76 @@
-import re
 import os
 import dbus
 import socket
+import traceback
 from time import sleep
 from dbus.mainloop.glib import DBusGMainLoop
 
 class BTKbDevice:
-    P_CTRL = 17 # Service control port - must match port configured in SDP record
-    P_INTR = 19 # Service interrupt port - must match port configured in SDP record
-
-    # BlueZ dbus
-    PROFILE_DBUS_PATH = "/bluez/yaptb/btkb_profile"
-    ADAPTER_IFACE = "org.bluez.Adapter1"
-    DEVICE_INTERFACE = "org.bluez.Device1"
-    DBUS_PROP_IFACE = "org.freedesktop.DBus.Properties"
-
-    SDP_RECORD_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)), "btkbdevice.xml")
-
-    # UUID for HID service (1124)
-    # https://www.bluetooth.com/specifications/assigned-numbers/service-discovery
     UUID = "00001124-0000-1000-8000-00805f9b34fb"
+    P_CTRL = 17
+    P_INTR = 19
+    SDP_RECORD_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)), "btkbdevice.xml")
+    PROFILE_DBUS_PATH = "/bluez/yaptb/btkb_profile"
 
     def __init__(self, hci=0):
         DBusGMainLoop(set_as_default=True)
-
-        self.bthost_mac = None
-        self.bthost_name = ""
-
-        self.scontrol = None
-        self.ccontrol = None  # Socket object for control
-        self.sinterrupt = None
-        self.cinterrupt = None  # Socket object for interrupt
-
         self.bus = dbus.SystemBus()
-        self.bus.add_signal_receiver(self.on_change, dbus_interface=self.DBUS_PROP_IFACE, signal_name="PropertiesChanged", arg0=self.DEVICE_INTERFACE, path_keyword="path")
-
-        self.dev_path = f"/org/bluez/hci{hci}"
-        self.adapter_methods = dbus.Interface(self.bus.get_object('org.bluez', self.dev_path), self.ADAPTER_IFACE)
-        self.adapter_property = dbus.Interface(self.bus.get_object('org.bluez', self.dev_path), self.DBUS_PROP_IFACE)
-
+        self.target = None
+        self.ccontrol = None
+        self.cinterrupt = None
         self.register_hid_profile()
 
-    def on_change(self, interface, changed, invalidated, path):
-        if 'Connected' in changed:
-            address = re.search(r"(\w{2}_){5}\w{2}$", path).group().replace("_", ":")
-            if changed['Connected']:
-                self.on_connected(address)
-            else:
-                self.on_disconnect(address)
-
-    def on_connected(self, address):
-        print(f"Connected {address}")
-
-    def on_disconnect(self, address):
-        print(f"Disconnected {address}")
-        self.bthost_mac = None
-        self.bthost_name = ""
-
-    @property
-    def address(self):
-        return self.adapter_property.Get(self.ADAPTER_IFACE, 'Address')
-
     def register_hid_profile(self):
-        print("Configuring Bluez Profile")
-        service_record = self.read_sdp_service_record()
-
-        opts = {
-            "Role": "server",
-            "AutoConnect": True,
-            "ServiceRecord": service_record,
-            "RequireAuthorization": True,
-            "RequireAuthentication": True,
-        }
-
+        record = open(BTKbDevice.SDP_RECORD_PATH, "r").read()
+        options = { "Role": "server", "AutoConnect": True, "ServiceRecord": record, "RequireAuthorization": True, "RequireAuthentication": True }
         manager = dbus.Interface(self.bus.get_object("org.bluez", "/org/bluez"), "org.bluez.ProfileManager1")
-        manager.RegisterProfile(BTKbDevice.PROFILE_DBUS_PATH, BTKbDevice.UUID, opts)
-
-    @staticmethod
-    def read_sdp_service_record():
-        fh = open(BTKbDevice.SDP_RECORD_PATH, "r")
-        return fh.read()
-
-    def create_ssockets(self):
-        print("Creating BT listening ssockets")
-
-        if self.scontrol:
-            self.scontrol.close()
-        if self.sinterrupt:
-            self.sinterrupt.close()
-
-        self.scontrol = socket.socket(socket.AF_BLUETOOTH, socket.SOCK_SEQPACKET, socket.BTPROTO_L2CAP)
-        self.scontrol.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self.sinterrupt = socket.socket(socket.AF_BLUETOOTH, socket.SOCK_SEQPACKET, socket.BTPROTO_L2CAP)
-        self.sinterrupt.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-
-    def listen(self):
-        if not self.scontrol or not self.sinterrupt:
-             self.create_ssockets()
-
-        # Bind address/port to existing sockets
-        self.scontrol.bind((self.address, self.P_CTRL))
-        self.sinterrupt.bind((self.address, self.P_INTR))
-
-        # Start listening on the server sockets with limit of 1 connection per socket
-        self.scontrol.listen(1)
-        self.sinterrupt.listen(1)
-
-        print("Waiting for connections")
-
-        self.ccontrol, cinfo = self.scontrol.accept()
-        print(f"{cinfo[0]} connected on the ccontrol socket")
-
-        self.cinterrupt, cinfo = self.sinterrupt.accept()
-        print(f"{cinfo[0]} connected on the cinterrupt channel")
-
-        self.bthost_mac = cinfo[0]
+        manager.RegisterProfile(BTKbDevice.PROFILE_DBUS_PATH, BTKbDevice.UUID, options)
 
     @property
     def devices(self):
         proxy_object = self.bus.get_object("org.bluez", "/")
-        manager = dbus.Interface(proxy_object, "org.freedesktop.DBus.ObjectManager")
-        managed_objects = manager.GetManagedObjects()
+        managed_objects = dbus.Interface(proxy_object, "org.freedesktop.DBus.ObjectManager").GetManagedObjects()
         connected_devices = []
         for path in managed_objects:
             device = managed_objects[path].get("org.bluez.Device1", {})
-            paired = device.get("Paired", False)
-            connected = device.get("Connected", False)
-            if not paired and not connected:
-                continue
-
             addr = device.get("Address")
             alias = device.get("Alias")
-            if not addr or not alias:
-                continue
-
-            connected_devices.append({ "addr": addr, "alias": alias, "paired": paired, "connected": connected })
+            paired = device.get("Paired", False)
+            connected = device.get("Connected", False)
+            if addr and alias and (paired or connected):
+                connected_devices.append({ "addr": addr, "alias": alias, "paired": paired, "connected": connected })
         return connected_devices
 
+    def connect(self, target):
+        try:
+            self.target = target
+            self.ccontrol = socket.socket(socket.AF_BLUETOOTH, socket.SOCK_SEQPACKET, socket.BTPROTO_L2CAP)
+            self.ccontrol.connect((self.target, self.P_CTRL))
+            self.cinterrupt = socket.socket(socket.AF_BLUETOOTH, socket.SOCK_SEQPACKET, socket.BTPROTO_L2CAP)
+            self.cinterrupt.connect((self.target, self.P_INTR))
+            if not self.is_connected:
+                raise Exception("It says it's connected but it's not!")
+
+            return True
+        except Exception as e:
+            print(f"Couldn't connect to {self.target} due to {e}")
+            traceback.print_exc()
+
+    @property
+    def is_connected(self):
+        for device in self.devices:
+            if device["addr"] == self.target and device["connected"]:
+                return True
+
     def send(self, msg):
-        self.cinterrupt.send(bytes(bytearray(msg)))
+        try:
+            if self.cinterrupt:
+                self.cinterrupt.send(bytes(bytearray(msg)))
+        except Exception as e:
+            print(f"Couldn't send to {self.target} due to {e}")
+            traceback.print_exc()
+
+    def test(self):
+        self.send([0xA1, 1, 0, 0, 30, 0, 0, 0, 0, 0])
+        sleep(0.1)
+        self.send([0xA1, 1, 0, 0,  0, 0, 0, 0, 0, 0])
