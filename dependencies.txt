@@ -1,0 +1,30 @@
+OS install:
+
+1. Use BalenaEtcher to flush https://dietpi.com/
+   1. Set 'AUTO_SETUP_NET_WIFI_ENABLED=1' in dietpi.txt
+   2. Update dietpi-wifi.txt
+1. DietPi-Config:
+   1. Log in as root
+   2. Turn on Bluetooth
+   3. Turn on I2C
+   4. Turn on SPI
+   5. Set Temp Limit to 85
+4. Set 'ExecStart=/usr/lib/bluetooth/bluetoothd -P input' in /lib/systemd/system/bluetooth.service
+3. https://github.com/Anodynous/stenogotchi?tab=readme-ov-file#significantly-reduce-boot-time
+
+Package Install:
+
+apt-get install -y git screen netcat-openbsd python3-buttonshim python3-evdev python3-pexpect python3-pil python3-spidev python3-gpiozero python3-rpi.gpio python3-dbus
+
+MProcs Install:
+
+wget https://github.com/pvolok/mprocs/releases/download/v0.7.1/mprocs-0.7.1-linux-aarch64-musl.tar.gz
+tar -xvzf mprocs-0.7.1-linux-aarch64-musl.tar.gz
+mv mprocs /usr/bin
+
+Project Bootstrap:
+
+1. git clone https://github.com/nskazki/stenogotchi
+2. Run dietpi-config: Autostart > Custom Script With Autologin.
+   ~/stenogotchi/builtin_led_off.sh
+   screen -S mprocs -dm mprocs -c ~/stenogotchi/mprocs.yaml
