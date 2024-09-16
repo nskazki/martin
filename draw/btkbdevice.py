@@ -2,8 +2,6 @@ import re
 import os
 import dbus
 import socket
-import signal
-import dbus.service
 from time import sleep
 from dbus.mainloop.glib import DBusGMainLoop
 
@@ -17,13 +15,15 @@ class BTKbDevice:
     DEVICE_INTERFACE = "org.bluez.Device1"
     DBUS_PROP_IFACE = "org.freedesktop.DBus.Properties"
 
-    SDP_RECORD_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)), "plover_link_btserver_sdp_record.xml")
+    SDP_RECORD_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)), "btkbdevice.xml")
 
     # UUID for HID service (1124)
     # https://www.bluetooth.com/specifications/assigned-numbers/service-discovery
     UUID = "00001124-0000-1000-8000-00805f9b34fb"
 
     def __init__(self, hci=0):
+        DBusGMainLoop(set_as_default=True)
+
         self.bthost_mac = None
         self.bthost_name = ""
 
@@ -51,11 +51,6 @@ class BTKbDevice:
 
     def on_connected(self, address):
         print(f"Connected {address}")
-        sleep(3)
-        self.send([0xA1, 1, 0, 0, 30, 0, 0, 0, 0, 0])
-        sleep(0.01)
-        self.send([0xA1, 1, 0, 0,  0, 0, 0, 0, 0, 0])
-        sleep(0.01)
 
     def on_disconnect(self, address):
         print(f"Disconnected {address}")
@@ -120,25 +115,27 @@ class BTKbDevice:
         print(f"{cinfo[0]} connected on the cinterrupt channel")
 
         self.bthost_mac = cinfo[0]
-        self.bthost_name = self.get_connected_device_name()
 
-    def get_connected_device_name(self):
+    @property
+    def devices(self):
         proxy_object = self.bus.get_object("org.bluez", "/")
         manager = dbus.Interface(proxy_object, "org.freedesktop.DBus.ObjectManager")
         managed_objects = manager.GetManagedObjects()
+        connected_devices = []
         for path in managed_objects:
-            con_state = managed_objects[path].get("org.bluez.Device1", {}).get("Connected", False)
-            if con_state:
-                addr = managed_objects[path].get("org.bluez.Device1", {}).get("Address")
-                alias = managed_objects[path].get("org.bluez.Device1", {}).get("Alias")
-                print(f"Device {alias} [{addr}] is connected")
-                return alias
+            device = managed_objects[path].get("org.bluez.Device1", {})
+            paired = device.get("Paired", False)
+            connected = device.get("Connected", False)
+            if not paired and not connected:
+                continue
+
+            addr = device.get("Address")
+            alias = device.get("Alias")
+            if not addr or not alias:
+                continue
+
+            connected_devices.append({ "addr": addr, "alias": alias, "paired": paired, "connected": connected })
+        return connected_devices
 
     def send(self, msg):
         self.cinterrupt.send(bytes(bytearray(msg)))
-
-if __name__ == '__main__':
-    DBusGMainLoop(set_as_default=True)
-    device = BTKbDevice()
-    device.listen()
-    signal.pause()
