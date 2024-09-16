@@ -12,8 +12,11 @@ from socket_helpers import send_to_socket, SOCKET_CAT, SOCKET_BCTL, SOCKET_BUTTO
 from stdout_logger import StdoutLogger
 
 BCTL_TIMEOUT = 5
-USER_TIMEOUT = 30
-WARN_TIMEOUT = 20
+PKEY_TIMEOUT = 60
+PKEY_WARNING = 50
+CONFIRM_TIMEOUT = 15
+CONFIRM_WARNING = 10
+
 TIMER_INTERVAL = 1
 
 bctl = None
@@ -47,7 +50,7 @@ def iterate_timer():
     if is_past(reject_at):
         new_reject_at(None)
         close_bctl()
-        send_to_socket(SOCKET_CAT, "Flush: Don't like them")
+        send_to_socket(SOCKET_CAT, "Flush: Didn't like them")
         send_to_socket(SOCKET_CAT, "Lie Down!")
         send_to_socket(SOCKET_BUTTONS, "Blink Short: Red")
 
@@ -58,7 +61,7 @@ def iterate_timer():
 
 def handle_yes():
     if not bctl and not pkey:
-        new_warn_at(WARN_TIMEOUT)
+        new_warn_at(PKEY_WARNING)
         new_reject_at(None)
 
         send_to_socket(SOCKET_CAT, "Draw: Looking around")
@@ -66,10 +69,10 @@ def handle_yes():
         wait_passkey()
 
         if pkey:
-            new_warn_at(WARN_TIMEOUT)
-            new_reject_at(USER_TIMEOUT)
+            new_warn_at(CONFIRM_WARNING)
+            new_reject_at(CONFIRM_TIMEOUT)
 
-            send_to_socket(SOCKET_CAT, f"Confirm? {pkey}")
+            send_to_socket(SOCKET_CAT, f"Befriend? {pkey}")
             send_to_socket(SOCKET_BUTTONS, "Blink Slow: Blue")
         else:
             send_to_socket(SOCKET_CAT, "Flush: Nobody's around")
@@ -151,7 +154,7 @@ def wait_passkey():
         bctl.sendline("discoverable on")
         bctl.expect("Changing discoverable on succeeded")
         bctl.sendline("default-agent")
-        bctl.expect(r"Confirm passkey (\d+)", timeout=USER_TIMEOUT)
+        bctl.expect(r"Confirm passkey (\d+)", timeout=PKEY_TIMEOUT)
         pkey = bctl.match.group(1).decode("utf-8")
     except Exception as e:
         print(f"Couldn't receive a passkey due to {e}")
