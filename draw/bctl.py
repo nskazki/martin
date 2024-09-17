@@ -186,9 +186,9 @@ def pair_passkey():
 
 def process_line(line):
     print(f"Processing {line}")
-    if line == "Yes!":
+    if line == "Pair!":
         handle_yes()
-    elif line == "No!":
+    elif line == "Close!":
         close_bctl()
     else:
         print(f"Unknown {line}")

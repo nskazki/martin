@@ -14,15 +14,18 @@ from spawn import spawn
 from spawn_stdin import spawn_stdin
 from spawn_socket import spawn_socket
 
+DEFAULT_TEXT = "You are beautiful"
+
 FRAME_INTERVAL = 0.5
 TIMER_INTERVAL = 0.25
 
+DRAW_DELAY = 2
 IDLE_DELAY = 180
 FLUSH_DELAY = 10
 ABORT_DELAY = 120
 
 STEP_COUNT = 4
-TRUNCAT_AT = 18
+TRUNCAT_AT = 20
 
 STATE_CLIMB = "cat_climb"
 STATE_SIT_LEFT = "cat_sit_left"
@@ -79,6 +82,7 @@ updated_at = datetime.now()
 current_bt = None
 current_ip = None
 current_text = None
+current_halt = False
 current_step = 0
 current_state = STATE_CLIMB
 target_states = []
@@ -138,16 +142,18 @@ def manage_frame(error_event):
 def iterate_frame():
     frame_event.clear()
 
-    text = current_text or current_bt or current_ip or "You are beautiful"
+    text = current_text or current_bt or current_ip or DEFAULT_TEXT
     text = truncate(text, TRUNCAT_AT)
 
     can_idle = cycled_through_state() and in_one_of(SLEEP_STATES)
     should_idle = not current_text and is_older_than(updated_at, IDLE_DELAY)
 
-    if can_idle and should_idle:
+    if current_halt or (can_idle and should_idle):
         print("Have been idle for a while")
         draw_display(with_text("rina.bmp", text))
         freeze_display()
+        if current_halt:
+            raise Exception("halted!")
     else:
         new_step_at(FRAME_INTERVAL)
         frame = (current_step % STEP_COUNT) + 1
@@ -174,6 +180,8 @@ def process_line(line):
         plan_draw(value)
     elif what == "Clear":
         plan_clear()
+    elif what == "Halt":
+        plan_halt(value)
     elif what == "IP":
         plan_stat_update(what, value)
     elif what == "BT":
@@ -211,6 +219,12 @@ def plan_clear():
     new_clear_at(None)
     new_target_state(None)
 
+def plan_halt(value):
+    new_text(value)
+    new_halt(True)
+    new_clear_at(None)
+    new_target_state(None)
+
 def plan_stat_update(what, value):
     if what == "IP":
         new_ip(value)
@@ -233,6 +247,12 @@ def new_bt(value):
 def new_step(value):
     global current_step
     current_step = value
+    frame_event.set()
+
+def new_halt(value):
+    global current_halt
+    touch_updated_at()
+    current_halt = value
     frame_event.set()
 
 def new_text(value):

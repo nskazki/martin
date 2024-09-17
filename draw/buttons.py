@@ -4,11 +4,12 @@ import threading
 import buttonshim
 from time import sleep
 from spawn import spawn
+from bash_helpers import bash_halt, bash_led_on, bash_led_off
 from spawn_stdin import spawn_stdin
 from spawn_socket import spawn_socket
 from line_helpers import parse_line
 from time_helpers import is_past, seconds_from_now
-from socket_helpers import send_to_socket, SOCKET_CAT, SOCKET_BCTL, SOCKET_BUTTONS
+from socket_helpers import send_to_socket, SOCKET_CAT, SOCKET_BCTL, SOCKET_BUTTONS, SOCKET_TRANSMITTER
 from evdev import UInput, ecodes
 
 TIMER_INTERVAL = 0.1
@@ -22,6 +23,8 @@ COLOR_OFF = [0x00, 0x00, 0x00]
 COLOR_RED = [0x3f, 0x00, 0x00]
 COLOR_BLUE = [0x00, 0x00, 0x4f]
 COLOR_GREEN = [0x00, 0x3f, 0x00]
+
+cat_layer = True
 
 static_color = None
 
@@ -41,15 +44,27 @@ def button_p_handler(button, pressed):
     keycode = KEYCODES[button]
 
     if keycode == ecodes.KEY_E:
-        yes_bctl()
+        toggle_layer()
     elif keycode == ecodes.KEY_D:
-        run_right()
+        if cat_layer:
+            cat_run_right()
+        else:
+            bctl_pair()
     elif keycode == ecodes.KEY_C:
-        look_up()
+        if cat_layer:
+            cat_look_up()
+        else:
+            transmitter_prev()
     elif keycode == ecodes.KEY_B:
-        lie_down()
+        if cat_layer:
+            cat_lie_down()
+        else:
+            transmitter_next()
     elif keycode == ecodes.KEY_A:
-        run_left()
+        if cat_layer:
+            cat_run_left()
+        else:
+            all_halt()
 
     ui.write(ecodes.EV_KEY, keycode, 1)
     ui.syn()
@@ -60,24 +75,38 @@ def button_r_handler(button, pressed):
     ui.write(ecodes.EV_KEY, keycode, 0)
     ui.syn()
 
-def yes_bctl():
-    print("Sending Yes to BCTL")
-    send_to_socket(SOCKET_BCTL, "Yes!")
+def toggle_layer():
+    global cat_layer
+    cat_layer = not cat_layer
+    print(f"Switched the cat layer to {cat_layer}")
+    if cat_layer:
+        bash_led_off()
+    else:
+        bash_led_on()
 
-def run_right():
-    print("Sending Run Right! to the cat")
+def bctl_pair():
+    send_to_socket(SOCKET_BCTL, "Pair!")
+
+def transmitter_next():
+    send_to_socket(SOCKET_TRANSMITTER, "Next!")
+
+def transmitter_prev():
+    send_to_socket(SOCKET_TRANSMITTER, "Prev!")
+
+def all_halt():
+    send_to_socket(SOCKET_CAT, "Halt: See you space cowboy")
+    bash_halt(5)
+
+def cat_run_right():
     send_to_socket(SOCKET_CAT, "Run Right!")
 
-def lie_down():
-    print("Sending Lie Down! to the cat")
+def cat_lie_down():
     send_to_socket(SOCKET_CAT, "Lie Down!")
 
-def look_up():
-    print("Sending Look Up! to the cat")
+def cat_look_up():
     send_to_socket(SOCKET_CAT, "Look Up!")
 
-def run_left():
-    print("Sending Run Left! to the cat")
+def cat_run_left():
     send_to_socket(SOCKET_CAT, "Run Left!")
 
 def manage_pixel(error_event):
