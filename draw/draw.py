@@ -91,7 +91,7 @@ frame_event = threading.Event()
 timer_event = threading.Event()
 error_event = threading.Event()
 
-def manage_timer(error_event):
+def manage_timer():
     try:
         while True:
             iterate_timer()
@@ -130,7 +130,7 @@ def iterate_timer():
     else:
         timer_event.wait()
 
-def manage_frame(error_event):
+def manage_frame():
     try:
         while True:
             iterate_frame()
@@ -311,8 +311,8 @@ def switch_state():
 
 atexit.register(halt_display)
 
-frame_thread = spawn(manage_frame, error_event)
-timer_thread = spawn(manage_timer, error_event)
+frame_thread = spawn(manage_frame)
+timer_thread = spawn(manage_timer)
 stdin_thread = spawn_stdin(process_line, error_event)
 socket_thread = spawn_socket(SOCKET_CAT, process_line, error_event)
 

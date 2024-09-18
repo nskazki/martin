@@ -40,7 +40,29 @@ error_event = threading.Event()
 ui = UInput({ecodes.EV_KEY: KEYCODES}, name="Button-SHIM", bustype=ecodes.BUS_USB)
 
 @buttonshim.on_press(BUTTONS)
-def button_p_handler(button, pressed):
+def button_p_handler(button, _):
+    try:
+        process_button_press(button)
+    except Exception as e:
+        print(f"An unexpected error occurred in the button press handler: {e}")
+        traceback.print_exc()
+        error_event.set()
+
+@buttonshim.on_release(BUTTONS)
+def button_r_handler(button, _):
+    try:
+        process_button_release(button)
+    except Exception as e:
+        print(f"An unexpected error occurred in the button press handler: {e}")
+        traceback.print_exc()
+        error_event.set()
+
+def process_button_release(button):
+    keycode = KEYCODES[button]
+    ui.write(ecodes.EV_KEY, keycode, 0)
+    ui.syn()
+
+def process_button_press(button):
     keycode = KEYCODES[button]
 
     if keycode == ecodes.KEY_E:
@@ -67,12 +89,6 @@ def button_p_handler(button, pressed):
             all_halt()
 
     ui.write(ecodes.EV_KEY, keycode, 1)
-    ui.syn()
-
-@buttonshim.on_release(BUTTONS)
-def button_r_handler(button, pressed):
-    keycode = KEYCODES[button]
-    ui.write(ecodes.EV_KEY, keycode, 0)
     ui.syn()
 
 def toggle_layer():
@@ -109,7 +125,7 @@ def cat_look_up():
 def cat_run_left():
     send_to_socket(SOCKET_CAT, "Run Left!")
 
-def manage_pixel(error_event):
+def manage_pixel():
     try:
         while True:
             iterate_pixel()
@@ -213,7 +229,7 @@ def encode_color(name):
 turn_pixel_off()
 atexit.register(turn_pixel_off)
 
-pixel_thread = spawn(manage_pixel, error_event)
+pixel_thread = spawn(manage_pixel)
 stdin_thread = spawn_stdin(process_line, error_event)
 socket_thread = spawn_socket(SOCKET_BUTTONS, process_line, error_event)
 

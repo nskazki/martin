@@ -26,7 +26,7 @@ reject_at = None
 timer_event = threading.Event()
 error_event = threading.Event()
 
-def manage_timer(error_event):
+def manage_timer():
     try:
         while True:
             iterate_timer()
@@ -195,7 +195,7 @@ def process_line(line):
 
 atexit.register(close_bctl)
 
-timer_thread = spawn(manage_timer, error_event)
+timer_thread = spawn(manage_timer)
 stdin_thread = spawn_stdin(process_line, error_event)
 socket_thread = spawn_socket(SOCKET_BCTL, process_line, error_event)
 
