@@ -25,7 +25,7 @@ FLUSH_DELAY = 10
 ABORT_DELAY = 120
 
 STEP_COUNT = 4
-TRUNCAT_AT = 20
+TRUNCAT_AT = 21
 
 STATE_CLIMB = "cat_climb"
 STATE_SIT_LEFT = "cat_sit_left"
@@ -153,7 +153,7 @@ def iterate_frame():
         draw_display(with_text("rina.bmp", text))
         freeze_display()
         if current_halt:
-            raise Exception("halted!")
+            raise Exception("Halted!")
     else:
         new_step_at(FRAME_INTERVAL)
         frame = (current_step % STEP_COUNT) + 1
@@ -291,7 +291,7 @@ def touch_updated_at():
 def wipe_reached_state():
     if in_target_state():
         new_target_state(None)
-        print("Reached the target state!")
+        print("Reached the target state")
 
 def cycled_through_state():
     return (current_step % STEP_COUNT) + 1 == STEP_COUNT

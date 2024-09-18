@@ -26,5 +26,4 @@ Project Bootstrap:
 
 1. git clone https://github.com/nskazki/stenogotchi
 2. Run dietpi-config: Autostart > Custom Script With Autologin.
-   ~/stenogotchi/builtin_led_off.sh
    screen -S mprocs -dm mprocs -c ~/stenogotchi/mprocs.yaml

@@ -129,3 +129,6 @@ dmypy.json
 
 # OSX
 .DS_Store
+
+# App History
+.last_address

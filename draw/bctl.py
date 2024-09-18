@@ -8,7 +8,7 @@ from spawn_stdin import spawn_stdin
 from spawn_socket import spawn_socket
 from time_helpers import is_past, seconds_from_now
 from socket_helpers import send_to_socket
-from socket_helpers import send_to_socket, SOCKET_CAT, SOCKET_BCTL, SOCKET_BUTTONS
+from socket_helpers import send_to_socket, SOCKET_CAT, SOCKET_BCTL, SOCKET_BUTTONS, SOCKET_TRANSMITTER
 from stdout_logger import StdoutLogger
 
 BCTL_TIMEOUT = 5
@@ -53,19 +53,21 @@ def iterate_timer():
         send_to_socket(SOCKET_CAT, "Flush: Didn't like them")
         send_to_socket(SOCKET_CAT, "Lie Down!")
         send_to_socket(SOCKET_BUTTONS, "Blink Short: Red")
+        send_to_socket(SOCKET_TRANSMITTER, "Unpause!")
 
     if warn_at or reject_at:
         sleep(TIMER_INTERVAL)
     else:
         timer_event.wait()
 
-def handle_yes():
+def handle_pair():
     if not bctl and not pkey:
         new_warn_at(PKEY_WARNING)
         new_reject_at(None)
 
         send_to_socket(SOCKET_CAT, "Draw: Looking around")
         send_to_socket(SOCKET_BUTTONS, "Blink Slow: Blue")
+        send_to_socket(SOCKET_TRANSMITTER, "Pause!")
         wait_passkey()
 
         if pkey:
@@ -78,6 +80,7 @@ def handle_yes():
             send_to_socket(SOCKET_CAT, "Flush: Nobody's around")
             send_to_socket(SOCKET_CAT, "Lie Down!")
             send_to_socket(SOCKET_BUTTONS, "Blink Short: Red")
+            send_to_socket(SOCKET_TRANSMITTER, "Unpause!")
     elif pkey:
         new_warn_at(None)
         new_reject_at(None)
@@ -86,10 +89,14 @@ def handle_yes():
             send_to_socket(SOCKET_CAT, "Flush: Found a friend!")
             send_to_socket(SOCKET_CAT, "Run Left!")
             send_to_socket(SOCKET_BUTTONS, "Blink Short: Green")
+            send_to_socket(SOCKET_TRANSMITTER, "Unpause!")
         else:
             send_to_socket(SOCKET_CAT, "Flush: Can't be friends")
             send_to_socket(SOCKET_CAT, "Lie Down!")
             send_to_socket(SOCKET_BUTTONS, "Blink Short: Red")
+            send_to_socket(SOCKET_TRANSMITTER, "Unpause!")
+    else:
+        print("Ignoring!")
 
 def new_warn_at(in_seconds):
     global warn_at
@@ -187,7 +194,7 @@ def pair_passkey():
 def process_line(line):
     print(f"Processing {line}")
     if line == "Pair!":
-        handle_yes()
+        handle_pair()
     elif line == "Close!":
         close_bctl()
     else:

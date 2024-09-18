@@ -2,6 +2,9 @@ procs:
   sync:
     shell: cd ~/stenogotchi && git fetch && git reset --hard origin/main
     autostart: false
+  clear:
+    shell: cd ~/stenogotchi && rm -f .last_address
+    autostart: false
   draw:
     shell: python3 ~/stenogotchi/draw/draw.py
     stop: SIGTERM
@@ -10,4 +13,7 @@ procs:
     stop: SIGTERM
   buttons:
     shell: python3 ~/stenogotchi/draw/buttons.py
+    stop: SIGTERM
+  transmitter:
+    shell: python3 ~/stenogotchi/draw/transmitter.py
     stop: SIGTERM

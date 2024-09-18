@@ -76,7 +76,7 @@ def process_button_press(button):
         if cat_layer:
             cat_look_up()
         else:
-            transmitter_prev()
+            transmitter_retry()
     elif keycode == ecodes.KEY_B:
         if cat_layer:
             cat_lie_down()
@@ -94,20 +94,21 @@ def process_button_press(button):
 def toggle_layer():
     global cat_layer
     cat_layer = not cat_layer
-    print(f"Switched the cat layer to {cat_layer}")
     if cat_layer:
+        print(f"Switched to the cat layer")
         bash_led_off()
     else:
+        print(f"Switched from the cat layer")
         bash_led_on()
 
 def bctl_pair():
     send_to_socket(SOCKET_BCTL, "Pair!")
 
+def transmitter_retry():
+    send_to_socket(SOCKET_TRANSMITTER, "Retry!")
+
 def transmitter_next():
     send_to_socket(SOCKET_TRANSMITTER, "Next!")
-
-def transmitter_prev():
-    send_to_socket(SOCKET_TRANSMITTER, "Prev!")
 
 def all_halt():
     send_to_socket(SOCKET_CAT, "Halt: See you space cowboy")
@@ -200,7 +201,7 @@ def plan_light_off():
 def plan_short_blink(value):
     plan_start_blinking(value, FAST_BLINK_INTERVAL, 4)
 
-def plan_start_blinking(value, interval, countdown=60):
+def plan_start_blinking(value, interval, countdown=100):
     global blink_at, blink_state, blink_color, blink_interval, blink_countdown
     blink_at = None
     blink_state = False
@@ -226,7 +227,9 @@ def encode_color(name):
     elif name == "Green":
         return COLOR_GREEN
 
+bash_led_off()
 turn_pixel_off()
+
 atexit.register(turn_pixel_off)
 
 pixel_thread = spawn(manage_pixel)
