@@ -19,7 +19,6 @@ DEFAULT_TEXT = "You are beautiful"
 FRAME_INTERVAL = 0.5
 TIMER_INTERVAL = 0.25
 
-DRAW_DELAY = 2
 IDLE_DELAY = 180
 FLUSH_DELAY = 10
 ABORT_DELAY = 120
@@ -149,7 +148,7 @@ def iterate_frame():
     should_idle = not current_text and is_older_than(updated_at, IDLE_DELAY)
 
     if current_halt or (can_idle and should_idle):
-        print("Have been idle for a while")
+        print("Idling")
         draw_display(with_text("rina.bmp", text))
         freeze_display()
         if current_halt:
@@ -162,6 +161,10 @@ def iterate_frame():
     frame_event.wait()
 
 def process_line(line):
+    if current_halt:
+        print(f"Ignoring {line}")
+        return
+
     print(f"Processing {line}")
     what, value = parse_line(line)
     if what == "Run Left":
@@ -270,18 +273,18 @@ def new_target_state(states):
 
 def new_step_at(seconds):
     global step_at
-    if seconds:
-        step_at = seconds_from_now(seconds)
-    else:
+    if seconds is None:
         step_at = None
+    else:
+        step_at = seconds_from_now(seconds)
     timer_event.set()
 
 def new_clear_at(seconds):
     global clear_at
-    if seconds:
-        clear_at = seconds_from_now(seconds)
-    else:
+    if seconds is None:
         clear_at = None
+    else:
+        clear_at = seconds_from_now(seconds)
     timer_event.set()
 
 def touch_updated_at():

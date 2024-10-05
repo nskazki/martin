@@ -4,6 +4,7 @@ import threading
 import traceback
 from time import sleep
 from spawn import spawn
+from watch_bt import parse_address
 from spawn_stdin import spawn_stdin
 from spawn_socket import spawn_socket
 from time_helpers import is_past, seconds_from_now
@@ -85,11 +86,12 @@ def handle_pair():
         new_warn_at(None)
         new_reject_at(None)
 
-        if pair_passkey():
+        address = pair_passkey()
+        if address:
             send_to_socket(SOCKET_CAT, "Flush: Found a friend!")
             send_to_socket(SOCKET_CAT, "Run Left!")
             send_to_socket(SOCKET_BUTTONS, "Blink Short: Green")
-            send_to_socket(SOCKET_TRANSMITTER, "Unpause!")
+            send_to_socket(SOCKET_TRANSMITTER, f"Unpause: {address}")
         else:
             send_to_socket(SOCKET_CAT, "Flush: Can't be friends")
             send_to_socket(SOCKET_CAT, "Lie Down!")
@@ -100,18 +102,18 @@ def handle_pair():
 
 def new_warn_at(in_seconds):
     global warn_at
-    if in_seconds:
-        warn_at = seconds_from_now(in_seconds)
-    else:
+    if in_seconds is None:
         warn_at = None
+    else:
+        warn_at = seconds_from_now(in_seconds)
     timer_event.set()
 
 def new_reject_at(in_seconds):
     global reject_at
-    if in_seconds:
-        reject_at = seconds_from_now(in_seconds)
-    else:
+    if in_seconds is None:
         reject_at = None
+    else:
+        reject_at = seconds_from_now(in_seconds)
     timer_event.set()
 
 def close_bctl():
@@ -177,14 +179,15 @@ def pair_passkey():
 
     try:
         bctl.sendline("yes")
-        bctl.expect(r"Authorize service|Bonded: yes")
+        bctl.expect(r"Authorize service|[\w:]+ Bonded: yes")
         match = bctl.match.group(0).decode("utf-8")
 
-        if match == "Authorize service":
+        if "Authorize service" in match:
             bctl.sendline("yes")
-            bctl.expect("Player")
+            bctl.expect(r"Player [\w\/_]+")
+            match = bctl.match.group(0).decode("utf-8")
 
-        return True
+        return parse_address(match)
     except Exception as e:
         print(f"Couldn't pair due to {e}")
         return False

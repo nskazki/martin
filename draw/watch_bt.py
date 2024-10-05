@@ -33,6 +33,9 @@ def watch_bt(callback):
 
 def on_change(interface, changed, invalidated, path):
     if 'Connected' in changed:
-        address = re.search(r"(\w{2}_){5}\w{2}$", path).group().replace("_", ":")
+        address = parse_address(path)
         connected = changed['Connected']
         sole_callback(connected, address)
+
+def parse_address(path):
+    return re.search(r"([A-F0-9]{2}[_:]){5}[A-F0-9]{2}", path).group().replace("_", ":")

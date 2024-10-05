@@ -82,6 +82,9 @@ class BtKeyboard:
 
     @property
     def is_connected(self):
+        if not self.ccontrol or not self.cinterrupt:
+            return False
+
         for device in self.devices:
             if device["address"] == self.target and device["connected"]:
                 return True
