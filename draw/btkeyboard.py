@@ -82,12 +82,19 @@ class BtKeyboard:
 
     @property
     def is_connected(self):
-        if not self.ccontrol or not self.cinterrupt:
-            return False
+        try:
+            if not self.ccontrol or not self.cinterrupt:
+                return False
 
-        for device in self.devices:
-            if device["address"] == self.target and device["connected"]:
-                return True
+            if self.ccontrol.getpeername()[0] != self.target or self.cinterrupt.getpeername()[0] != self.target:
+                return False
+
+            for device in self.devices:
+                if device["address"] == self.target and device["connected"]:
+                    return True
+        except Exception as e:
+            print(f"Couldn't check if {self.target} is connected due to {e}")
+            return False
 
     def send(self, msg):
         try:

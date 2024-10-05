@@ -12,7 +12,7 @@ from socket_helpers import send_to_socket, SOCKET_CAT, SOCKET_BUTTONS, SOCKET_TR
 from last_address_helpers import read_last_address, write_last_address
 
 ZERO_DELAY = 0
-SHORT_DELAY = 1
+SHORT_DELAY = 3
 ABORT_DELAY = 120
 ATTEMPT_DELAY = 10
 TIMER_INTERVAL = 0.25
@@ -58,24 +58,24 @@ def iterate_timer():
         report_disconnect()
 
     if should_attempt():
+        local_target = current_target
         new_attempt_at(None)
         new_internal_unlock_at(ABORT_DELAY)
-        local_target = current_target
-        print(f"Locking and trying {local_target}")
 
+        print(f"Locking and trying {local_target}")
         report_attempt(local_target)
-        if btkeyboard.connect(local_target):
-            if local_target == current_target:
-                print(f"Connected to {local_target}")
-                report_connect(local_target)
-                write_last_address(local_target)
-            else:
-                print("Ignoring successful connection")
-        elif local_target == current_target:
-            report_unsuccessful_attempt(current_target)
-            print(f"Couldn't connect to {local_target}")
+        connected = btkeyboard.connect(local_target)
+
+        if local_target != current_target or external_unlock_at:
+            print(f"Ignoring {local_target} changing its state to Connected={connected}")
+            btkeyboard.disconnect()
+        elif connected:
+            print(f"Connected to {local_target}")
+            report_connect(local_target)
+            write_last_address(local_target)
         else:
-            print("Ignoring unsuccessful connection")
+            print(f"Couldn't connect to {local_target}")
+            report_unsuccessful_attempt(current_target)
 
         new_internal_unlock_at(SHORT_DELAY)
 
@@ -182,16 +182,13 @@ def new_external_unlock_at(value):
     attempt_event.set()
 
 def can_attempt():
-    return not is_connected() and current_target
+    return not is_connected() and current_target and not external_unlock_at
 
 def should_attempt():
-    return can_attempt() and is_past(attempt_at) and not is_locked()
+    return can_attempt() and is_past(attempt_at)
 
 def should_schedule_attempt():
     return can_attempt() and not attempt_at
-
-def is_locked():
-    return external_unlock_at or internal_unlock_at
 
 def is_connected():
     return btkeyboard.is_connected and btkeyboard.target == current_target
