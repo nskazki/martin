@@ -3,13 +3,12 @@ import traceback
 import threading
 from time import sleep
 from datetime import datetime
-from text_helpers import truncate
 from list_helpers import wrap_list
 from line_helpers import parse_line
 from time_helpers import seconds_from_now, is_past, is_older_than
 from state_helpers import next_state, CAN, LOW, DEFAULT
 from socket_helpers import SOCKET_CAT
-from display_helpers import draw_display, freeze_display, halt_display, with_text
+from display_helpers import draw_display, freeze_display, halt_display, with_text, is_long_text
 from spawn import spawn
 from spawn_stdin import spawn_stdin
 from spawn_socket import spawn_socket
@@ -20,11 +19,10 @@ FRAME_INTERVAL = 0.5
 TIMER_INTERVAL = 0.25
 
 IDLE_DELAY = 180
-FLUSH_DELAY = 10
+FLUSH_DELAY = 20
 ABORT_DELAY = 120
 
 STEP_COUNT = 4
-TRUNCAT_AT = 21
 
 STATE_CLIMB = "cat_climb"
 STATE_SIT_LEFT = "cat_sit_left"
@@ -41,6 +39,7 @@ SLEEP_STATES = [STATE_SLEEP_LEFT]
 LOOK_UP_STATES = [STATE_LOOK_UP_LEFT]
 LIE_DOWN_STATES = [STATE_LIE_DOWN_LEFT]
 REWINDABLE_STATES = [STATE_SIT_LEFT, STATE_LIE_DOWN_LEFT, STATE_SLEEP_LEFT, STATE_LOOK_UP_LEFT, STATE_SIT_RIGHT]
+HALF_SCREEN_STATES = [STATE_SLEEP_LEFT, STATE_LIE_DOWN_LEFT]
 
 STATES = {
     STATE_CLIMB: {
@@ -142,21 +141,20 @@ def iterate_frame():
     frame_event.clear()
 
     text = current_text or current_bt or current_ip or DEFAULT_TEXT
-    text = truncate(text, TRUNCAT_AT)
-
     can_idle = cycled_through_state() and in_one_of(SLEEP_STATES)
     should_idle = not current_text and is_older_than(updated_at, IDLE_DELAY)
 
     if current_halt or (can_idle and should_idle):
         print("Idling")
-        draw_display(with_text("rina.bmp", text))
+        draw_display(with_text("rina.bmp", text, False))
         freeze_display()
         if current_halt:
             raise Exception("Halted!")
     else:
         new_step_at(FRAME_INTERVAL)
         frame = (current_step % STEP_COUNT) + 1
-        draw_display(with_text(f"{current_state}/{frame}.bmp", text))
+        half_screen = in_one_of(HALF_SCREEN_STATES)
+        draw_display(with_text(f"{current_state}/{frame}.bmp", text, half_screen))
 
     frame_event.wait()
 
@@ -210,12 +208,18 @@ def plan_lie_down():
 def plan_flush(value):
     new_text(value)
     new_clear_at(FLUSH_DELAY)
-    new_target_state(LOOK_UP_STATES)
+    if not is_long_text(value):
+        new_target_state(LOOK_UP_STATES)
+    else:
+        new_target_state(LIE_DOWN_STATES)
 
 def plan_draw(value):
     new_text(value)
     new_clear_at(ABORT_DELAY)
-    new_target_state(LOOK_UP_STATES)
+    if not is_long_text(value):
+        new_target_state(LOOK_UP_STATES)
+    else:
+        new_target_state(LIE_DOWN_STATES)
 
 def plan_clear():
     new_text(None)
@@ -233,7 +237,6 @@ def plan_stat_update(what, value):
         new_ip(value)
     elif what == "BT":
         new_bt(value)
-    new_target_state(LOOK_UP_STATES)
 
 def new_ip(value):
     global current_ip

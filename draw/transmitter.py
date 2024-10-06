@@ -14,7 +14,7 @@ from last_address_helpers import read_last_address, write_last_address
 ZERO_DELAY = 0
 SHORT_DELAY = 3
 ABORT_DELAY = 120
-ATTEMPT_DELAY = 10
+ATTEMPT_DELAY = 60
 TIMER_INTERVAL = 0.25
 
 btkeyboard = BtKeyboard()
@@ -199,19 +199,19 @@ def get_addresses():
 def get_alias(address):
     for device in btkeyboard.devices:
         if device["address"] == address:
-            return device["alias"]
-    return address
+            return device["alias"].lower()
+    return address.lower()
 
 def report_failure(message):
     send_to_socket(SOCKET_CAT, f"Flush: {message}")
     send_to_socket(SOCKET_BUTTONS, "Blink Short: Red")
 
 def report_attempt(address):
-    send_to_socket(SOCKET_CAT, f"Flush: Calling for {get_alias(address)}")
+    send_to_socket(SOCKET_CAT, f"Flush: Inviting over {get_alias(address)}")
     send_to_socket(SOCKET_BUTTONS, "Blink Slow: Blue")
 
 def report_connect(address):
-    send_to_socket(SOCKET_CAT, f"Flush: Playing with {get_alias(address)}")
+    send_to_socket(SOCKET_CAT, f"Flush: Having tea with {get_alias(address)}")
     send_to_socket(SOCKET_BUTTONS, "Blink Short: Green")
     send_to_socket(SOCKET_BUTTONS, "Light On: Blue")
 
