@@ -14,7 +14,7 @@ OS install:
 
 Package Install:
 
-apt-get install -y git screen netcat-openbsd python3-buttonshim python3-evdev python3-pexpect python3-pil python3-spidev python3-gpiozero python3-rpi.gpio python3-dbus python3-gi
+apt-get install -y git screen netcat-openbsd python3-buttonshim python3-evdev python3-pexpect python3-pil python3-spidev python3-gpiozero python3-rpi.gpio python3-dbus python3-gi python3-pyudev
 
 MProcs Install:
 

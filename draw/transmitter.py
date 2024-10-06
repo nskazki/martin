@@ -140,6 +140,14 @@ def test_target():
     btkeyboard.test()
 
 def on_bt_change(connected, address):
+    try:
+        iterate_bt_change(connected, address)
+    except Exception as e:
+        print(f"An unexpected error occurred in the bt change handler: {e}")
+        traceback.print_exc()
+        error_event.set()
+
+def iterate_bt_change(connected, address):
     if internal_unlock_at:
         print(f"Ignoring {address} changing to Connected={connected}")
         return

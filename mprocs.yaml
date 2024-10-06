@@ -7,13 +7,11 @@ procs:
     autostart: false
   draw:
     shell: python3 ~/stenogotchi/draw/draw.py
-    stop: SIGTERM
   bctl:
     shell: python3 ~/stenogotchi/draw/bctl.py
-    stop: SIGTERM
   buttons:
     shell: python3 ~/stenogotchi/draw/buttons.py
-    stop: SIGTERM
   transmitter:
     shell: python3 ~/stenogotchi/draw/transmitter.py
-    stop: SIGTERM
+  input_relay:
+    shell: python3 ~/stenogotchi/draw/input_relay.py
