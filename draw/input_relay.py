@@ -1,12 +1,12 @@
+import json
 import evdev
 import pyudev
 import traceback
 import threading
-from time import sleep
 from spawn import spawn
 from select import select
 from list_helpers import difference
-from time_helpers import is_past, seconds_from_now
+from socket_helpers import send_to_socket, SOCKET_CAT, SOCKET_TRANSMITTER
 
 TARGET_LENGTH = 6
 
@@ -194,25 +194,28 @@ device_event = threading.Event()
 device_observer = None
 
 def manage_inputs():
-    try:
-        while True:
+    while True:
+        try:
             iterate_inputs()
-    except Exception as e:
-        print(f"An unexpected error occurred in the inputs manager: {e}")
-        print("Carrying on")
+        except Exception as e:
+            print(f"An unexpected error occurred in the inputs manager: {e}")
+            traceback.print_exc()
+            print("Carrying on")
 
 def iterate_inputs():
     read_list, _, _ = select(devices, [], [], 0.01)
     for file_descriptor in read_list:
         for event in file_descriptor.read():
-            if event.type == evdev.ecodes.EV_KEY and event.value < 2:
+            if event.type == evdev.ecodes.EV_KEY and event.value <= 1:
                 key_str = evdev.ecodes.KEY[event.code]
                 mod_key = to_mod_key(key_str)
                 ord_key = to_ord_key(key_str)
+
                 if mod_key != -1:
                     update_mod_keys(mod_key, event.value)
                 elif ord_key != -1:
                     update_ord_keys(ord_key, event.value)
+
                 send_keys()
 
 def to_mod_key(key_str):
@@ -237,10 +240,11 @@ def update_mod_keys(mod_key, value):
 
 def update_ord_keys(ord_key, value):
     global pressed_keys
-    if value < 1:
+    if value == 0:
         pressed_keys.remove(ord_key)
     elif ord_key not in pressed_keys:
         pressed_keys.insert(0, ord_key)
+
     len_delta = TARGET_LENGTH - len(pressed_keys)
     if len_delta < 0:
         pressed_keys = pressed_keys[:len_delta]
@@ -248,7 +252,7 @@ def update_ord_keys(ord_key, value):
         pressed_keys.extend([0] * len_delta)
 
 def send_keys():
-    print(encode_keys())
+    send_to_socket(SOCKET_TRANSMITTER, f"Send: {json.dumps(encode_keys())}")
 
 def encode_keys():
     return [0xA1, 0x01, mod_keys, 0, *pressed_keys]
@@ -273,7 +277,16 @@ def iterate_devices():
             device.grab()
             print(f"Grabbed keyboard {device.name} at path {device.path}")
         for device in del_devices:
+            device.close()
             print(f"Lost keyboard {device.name} at path {device.path}")
+
+        if not cur_devices:
+            send_to_socket(SOCKET_CAT, "Lost all toys")
+        elif len(cur_devices) > len(devices):
+            send_to_socket(SOCKET_CAT, "Found a toy!")
+        else:
+            send_to_socket(SOCKET_CAT, "Lost a toy")
+
         devices = cur_devices
     device_event.wait()
 

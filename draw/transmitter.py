@@ -1,3 +1,4 @@
+import json
 import threading
 import traceback
 from time import sleep
@@ -98,6 +99,8 @@ def process_line(line):
         next_target()
     elif what == "Test":
         test_target()
+    elif what == "Send":
+        send_target(value)
     elif what == "Pause":
         pause_timer()
     elif what == "Unpause":
@@ -138,6 +141,9 @@ def next_target():
 
 def test_target():
     btkeyboard.test()
+
+def send_target(value):
+    btkeyboard.send(json.loads(value))
 
 def on_bt_change(connected, address):
     try:

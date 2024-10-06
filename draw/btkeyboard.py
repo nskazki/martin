@@ -98,10 +98,7 @@ class BtKeyboard:
 
     def send(self, msg):
         try:
-            if self.is_connected:
-                self.cinterrupt.send(bytes(bytearray(msg)))
-            else:
-                print(f"Couldn't send to {self.target} due to the lack of connection!")
+            self.cinterrupt.send(bytes(bytearray(msg)))
         except Exception as e:
             print(f"Couldn't send to {self.target} due to {e}")
             print("Going to disconnect!")
