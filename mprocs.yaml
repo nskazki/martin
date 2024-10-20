@@ -7,11 +7,16 @@ procs:
     autostart: false
   draw:
     shell: python3 ~/stenogotchi/draw/draw.py
+    autorestart: true
   bctl:
     shell: python3 ~/stenogotchi/draw/bctl.py
+    autorestart: true
   buttons:
     shell: python3 ~/stenogotchi/draw/buttons.py
+    autorestart: true
   transmitter:
     shell: python3 ~/stenogotchi/draw/transmitter.py
+    autorestart: true
   input_relay:
     shell: python3 ~/stenogotchi/draw/input_relay.py
+    autorestart: true
