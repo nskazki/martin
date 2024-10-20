@@ -74,7 +74,7 @@ def process_button_press(button):
             bctl_pair()
     elif keycode == ecodes.KEY_C:
         if cat_layer:
-            cat_look_up()
+            cat_say_wish()
         else:
             transmitter_retry()
     elif keycode == ecodes.KEY_B:
@@ -120,8 +120,8 @@ def cat_run_right():
 def cat_lie_down():
     send_to_socket(SOCKET_CAT, "Lie Down!")
 
-def cat_look_up():
-    send_to_socket(SOCKET_CAT, "Look Up!")
+def cat_say_wish():
+    send_to_socket(SOCKET_CAT, "Say Wish!")
 
 def cat_run_left():
     send_to_socket(SOCKET_CAT, "Run Left!")

@@ -1,4 +1,5 @@
 import atexit
+import random
 import traceback
 import threading
 from time import sleep
@@ -12,6 +13,34 @@ from display_helpers import draw_display, freeze_display, halt_display, with_tex
 from spawn import spawn
 from spawn_stdin import spawn_stdin
 from spawn_socket import spawn_socket
+
+WISHES = [
+    "Change takes time",
+    "I believe in you",
+    "Best of luck today",
+    "Give it time",
+    "See which way the cat jumps",
+    "Cats land on their feet; so will you",
+    "Patience brings reward",
+    "Keep on keeping on",
+    "You've done well",
+    "Fingers crossed ",
+    "One step at a time",
+    "It's okay to feel sad",
+    "This too shall pass",
+    "Take time for yourself",
+    "I know it’s hard",
+    "I’m proud of you",
+    "You’ll handle this",
+    "No need to rush",
+    "It’ll work out",
+    "You're not alone",
+    "You're valued",
+    "Don’t give up",
+    "One day at a time",
+    "You're not a superhero",
+    "Ask for an advice"
+]
 
 DEFAULT_TEXT = "You are beautiful"
 
@@ -175,6 +204,8 @@ def process_line(line):
         plan_lie_down()
     elif what == "Sleep":
         plan_sleep()
+    elif what == "Say Wish":
+        plan_say_wish()
     elif what == "Flush":
         plan_flush(value)
     elif what == "Draw":
@@ -204,6 +235,10 @@ def plan_sleep():
 
 def plan_lie_down():
     new_target_state(LIE_DOWN_STATES)
+
+def plan_say_wish():
+    wish = random.choice([x for x in WISHES if x != current_text])
+    plan_flush(wish)
 
 def plan_flush(value):
     new_text(value)
