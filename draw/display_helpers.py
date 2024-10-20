@@ -14,8 +14,12 @@ MAX_LINE_LENGTH = 20
 epd = epd2in13_V4.EPD()
 font_32 = ImageFont.truetype(os.path.join(assets, "Sevillana.ttf"), 32)
 display_ready = False
+display_halted = False
 
 def draw_display(image):
+    if display_halted:
+        return
+
     if display_ready:
         epd.displayPartial(epd.getbuffer(image))
     else:
@@ -23,6 +27,10 @@ def draw_display(image):
 
 def init_display(image):
     global display_ready
+
+    if display_halted:
+        return
+
     print("Initalizing display")
     display_ready = True
     epd.init()
@@ -35,6 +43,12 @@ def freeze_display():
     epd.sleep()
 
 def halt_display():
+    global display_halted
+
+    if display_halted:
+        return
+
+    display_halted = True
     print("Exiting the EPD module")
     if display_ready:
         epd.sleep()
