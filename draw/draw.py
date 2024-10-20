@@ -219,7 +219,7 @@ def process_line(line):
     elif what == "BT":
         plan_stat_update(what, value)
     else:
-        plan_draw(line)
+        plan_flush(line)
 
 def plan_run_left():
     new_target_state(STATE_RUN_LEFT)
