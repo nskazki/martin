@@ -177,8 +177,6 @@ def iterate_frame():
         print("Idling")
         draw_display(with_text("rina.bmp", text, False))
         freeze_display()
-        if current_halt:
-            raise Exception("Halted!")
     else:
         new_step_at(FRAME_INTERVAL)
         frame = (current_step % STEP_COUNT) + 1
