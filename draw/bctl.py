@@ -62,7 +62,7 @@ def iterate_timer():
         timer_event.wait()
 
 def handle_pair():
-    if not bctl and not pkey:
+    if not bctl:
         new_warn_at(PKEY_WARNING)
         new_reject_at(None)
 
@@ -129,7 +129,8 @@ def close_bctl():
     except Exception as e:
         print(f"Couldn't turn off discoverability due to {e}")
     finally:
-        bctl.close()
+        if bctl:
+            bctl.close()
         bctl = None
 
 def spawn_bctl():
@@ -156,6 +157,7 @@ def wait_passkey():
         return
 
     try:
+        pkey = None
         bctl.sendline("power on")
         bctl.expect("Changing power on succeeded")
         bctl.sendline("system-alias Martin")
@@ -170,13 +172,6 @@ def wait_passkey():
         close_bctl()
 
 def pair_passkey():
-    global pkey
-
-    if not bctl or not pkey:
-        return
-
-    pkey = None
-
     try:
         bctl.sendline("yes")
         bctl.expect(r"Authorize service|[\w:]+ Bonded: yes")
