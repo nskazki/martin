@@ -10,7 +10,7 @@ https://github.com/user-attachments/assets/a12da5b0-083d-4dac-8ee8-fa671276df1d
    1. If the switch is already in the ON position but the device is OFF,
       press the button on the right on the same board.
    2. If the blue light flashes once as you toggle the switch,
-      charge the device by plugging a USB-C cable into the same board.
+      charge the device by plugging a USB-C to USB-C cable into the same board.
 2. Use buttons A to D to control the cat once it's climbed the screen.
 
 # How to Bluetooth
@@ -19,7 +19,7 @@ https://github.com/user-attachments/assets/a12da5b0-083d-4dac-8ee8-fa671276df1d
    The green light on the front board lights on when in the alternative layer.
 2. Press button D to make the device discoverable.
 4. Connect to the "Martin" Bluetooth input device on a phone or computer and confirm pairing by pressing button D again.
-5. Plug a keyboard into the device and enjoy the wireless but slightly delayed typing experience 🐈‍⬛ 
+5. Plug a keyboard into the device using a USB-C to USB-Micro cable and enjoy the wireless but slightly delayed typing experience 🐈‍⬛ 
 
 # How to Re-Bluetooth
 
