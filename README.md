@@ -12,6 +12,9 @@ https://github.com/user-attachments/assets/a12da5b0-083d-4dac-8ee8-fa671276df1d
    2. If the blue light flashes once as you toggle the switch,
       charge the device by plugging a USB-C to USB-C cable into the same board.
 2. Use buttons A to D to control the cat once it's climbed the screen.
+   1. It takes about a minute for the device to boot.
+   2. The green light on the front board flashes as it boots.
+   3. Once booted, the green light goes off, and the cat jumps in.
 
 # How to Bluetooth
 
